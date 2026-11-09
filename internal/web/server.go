@@ -228,8 +228,9 @@ var notices = map[string]views.Flash{
 	"wish-thinking":         {Kind: "ok", Text: "Dein Wunsch ist gespeichert. Du hast noch Bedenkzeit und giltst erst als bereit, wenn du sie ausschaltest."},
 	"open":                  {Kind: "ok", Text: "Andere können jetzt Überraschungen für dich hinterlegen."},
 	"closed":                {Kind: "ok", Text: "Es können keine neuen Überraschungen mehr für dich hinterlegt werden."},
-	"closed-suffices":       {Kind: "ok", Text: "Es können keine neuen Überraschungen mehr für dich hinterlegt werden. Damit genügt dir auch keine Überraschung mehr als Wunsch – trag einen Wunsch ein, um bereit zu sein."},
-	"suffices":              {Kind: "ok", Text: "Alles klar: Sobald eine Überraschung für dich hinterlegt ist, bist du auch ohne eigenen Wunsch bereit."},
+	"closed-suffices":       {Kind: "ok", Text: "Es können keine neuen Überraschungen mehr für dich hinterlegt werden. Damit wartest du auch nicht mehr auf eine Überraschung – trag einen Wunsch ein, um bereit zu sein."},
+	"suffices":              {Kind: "ok", Text: "Alles klar: Sobald eine Überraschung für dich hinterlegt ist, bist du auch ohne eigenen Wunsch bereit. Die anderen sehen, dass sie dir helfen können."},
+	"suffices-opened":       {Kind: "ok", Text: "Alles klar: Überraschungen für dich sind jetzt eingeschaltet. Sobald eine hinterlegt ist, bist du auch ohne eigenen Wunsch bereit."},
 	"suffices-off":          {Kind: "ok", Text: "Du brauchst jetzt wieder einen eigenen Wunsch, um bereit zu sein."},
 	"surprise":              {Kind: "ok", Text: "Deine Überraschung ist gespeichert."},
 	"surprise-gone":         {Kind: "ok", Text: "Deine Überraschung ist gelöscht."},
@@ -674,20 +675,22 @@ func (s *Server) setSurprisesOpen(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	open := checked(r, "open")
-	// The second switch is only rendered while surprises are open. When
-	// the form comes without it, keep what was stored; the store clears
-	// it anyway on closing.
 	suffices := me.SurpriseSuffices
 	if _, sent := r.PostForm["suffices"]; sent {
 		suffices = checked(r, "suffices")
 	}
+	open, suffices = resolveSurpriseSwitches(r.PostFormValue("changed"), open, suffices, me)
+	turnedOnSuffices := suffices && !me.SurpriseSuffices
+
 	var notice string
 	switch {
 	case !open && me.SurpriseSuffices:
 		notice = "closed-suffices"
 	case !open:
 		notice = "closed"
-	case suffices && !me.SurpriseSuffices:
+	case turnedOnSuffices && !me.SurprisesOpen:
+		notice = "suffices-opened"
+	case turnedOnSuffices:
 		notice = "suffices"
 	case !suffices && me.SurpriseSuffices:
 		notice = "suffices-off"
@@ -695,6 +698,29 @@ func (s *Server) setSurprisesOpen(w http.ResponseWriter, r *http.Request) {
 		notice = "open"
 	}
 	s.afterChange(w, r, "/p/"+me.Token, s.store.SetSurprisePrefs(r.Context(), c.ID, me.ID, open, suffices), notice)
+}
+
+// resolveSurpriseSwitches applies the dependency between the two surprise
+// switches: hoping for a surprise needs surprises to be allowed, and refusing
+// surprises ends the hope. The switch the user flipped wins. With JavaScript
+// the form names it in "changed"; without, both may have been flipped before
+// pressing save, so it is worked out against the stored state.
+func resolveSurpriseSwitches(changed string, open, suffices bool, before store.Participant) (bool, bool) {
+	if changed == "" {
+		switch {
+		case suffices && !before.SurpriseSuffices:
+			changed = "suffices"
+		case open != before.SurprisesOpen:
+			changed = "open"
+		}
+	}
+	switch {
+	case changed == "suffices" && suffices:
+		open = true
+	case !open:
+		suffices = false
+	}
+	return open, suffices
 }
 
 // recipient resolves the {id} of a surprise route to somebody else in the

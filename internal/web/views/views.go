@@ -43,6 +43,10 @@ type Member struct {
 // Ready mirrors the draw's precondition.
 func (m Member) Ready() bool { return m.ReadyWith(m.Surprises) }
 
+// Wishless marks somebody who has no wish and hopes for a surprise instead.
+// The group should help them out, so they are highlighted.
+func (m Member) Wishless() bool { return !m.HasWish() && m.SurpriseSuffices }
+
 // AwaitsSurprise marks somebody who will be ready as soon as anybody leaves
 // a surprise idea for them – worth pointing out to the rest of the group.
 func (m Member) AwaitsSurprise() bool {
@@ -70,6 +74,10 @@ func (p CampaignPage) ReadyCount() int {
 	}
 	return n
 }
+
+// AsksForHelp reports that a member hopes for a surprise and ideas can still
+// be added, which highlights them and asks the others to chip in.
+func (p CampaignPage) AsksForHelp(m Member) bool { return m.Wishless() && !p.Campaign.Drawn() }
 
 // AllReady reports whether the draw may happen.
 func (p CampaignPage) AllReady() bool {
@@ -111,6 +119,19 @@ func (p ParticipantPage) MeMember() Member {
 		}
 	}
 	return Member{Participant: p.Me}
+}
+
+// HelpWanted lists the others who ask for help (see AsksForHelp) and have
+// no idea yet, for the banner at the top. One idea is enough to make them
+// ready, so after that nobody is asked any more; the highlight stays.
+func (p ParticipantPage) HelpWanted() []Member {
+	var out []Member
+	for _, m := range p.Members {
+		if !m.IsMe && p.AsksForHelp(m) && m.Surprises == 0 {
+			out = append(out, m)
+		}
+	}
+	return out
 }
 
 // MySurpriseCount is how many ideas others left for the viewer that will

@@ -70,9 +70,13 @@
     if (msg && !confirm(msg)) ev.preventDefault();
   });
 
-  // Switches save as soon as they change.
+  // Switches save as soon as they change. The form says which one changed,
+  // so the server need not guess from a page that may be out of date.
   for (const form of document.querySelectorAll("form[data-autosubmit]")) {
-    form.addEventListener("change", () => form.requestSubmit());
+    form.addEventListener("change", (ev) => {
+      if (form.elements.changed) form.elements.changed.value = ev.target.name;
+      form.requestSubmit();
+    });
   }
 
   // --- Markdown editor ------------------------------------------------------

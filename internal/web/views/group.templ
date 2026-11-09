@@ -17,7 +17,7 @@ templ Group(p CampaignPage, actions func(Member) templ.Component) {
 		} else {
 			<ul class="members">
 				for _, m := range p.Members {
-					<li class={ "member", templ.KV("member-me", m.IsMe) } data-member={ m.Name }>
+					<li class={ "member", templ.KV("member-me", m.IsMe), templ.KV("member-help", p.AsksForHelp(m)) } data-member={ m.Name }>
 						<div class="member-name">
 							{ m.Name }
 							if m.IsMe {
@@ -28,7 +28,7 @@ templ Group(p CampaignPage, actions func(Member) templ.Component) {
 							if m.HasWish() {
 								<li class="badge badge-yes">✓ Wunsch hinterlegt</li>
 							} else if m.SurpriseSuffices {
-								<li class={ "badge", templ.KV("badge-yes", m.Surprises > 0), templ.KV("badge-neutral", m.Surprises == 0) }>✨ Lässt sich überraschen</li>
+								<li class={ "badge", templ.KV("badge-help", p.AsksForHelp(m)), templ.KV("badge-neutral", !p.AsksForHelp(m)) }>😍 Wunschlos glücklich</li>
 							} else {
 								<li class="badge badge-no">✗ Noch kein Wunsch</li>
 							}

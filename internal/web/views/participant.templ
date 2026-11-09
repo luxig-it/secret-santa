@@ -4,6 +4,12 @@ templ Participant(p ParticipantPage) {
 	@Layout(p.Campaign.Title) {
 		@CampaignHead(p.Campaign)
 		@FlashBox(p.Flash)
+		for _, m := range p.HelpWanted() {
+			<section class="card card-help" data-help={ m.Name }>
+				<p>Fällt dir eine Überraschung zu <b>{ m.Name }</b> ein? { m.Name } selbst ist wunschlos glücklich 😍</p>
+				<a class="btn btn-small" href={ templ.URL(idPath(participantPath(p.Me.Token, "/s"), m.ID, "")) }>Überraschung für { m.Name } hinterlegen</a>
+			</section>
+		}
 		<section class="card card-accent">
 			<h2>Hallo { p.Me.Name }!</h2>
 			<p>Das ist <b>dein persönlicher Link</b>. Speichere ihn als Lesezeichen und gib ihn nicht weiter – wer ihn hat, sieht, wen du beschenkst.</p>
@@ -102,7 +108,7 @@ templ mySurprisesCard(p ParticipantPage) {
 		}
 		if p.Campaign.Drawn() {
 			if p.Me.SurpriseSuffices && !p.Me.HasWish() {
-				<p class="muted">Dir hat eine Überraschung als Wunsch genügt.</p>
+				<p class="muted">Dir ist nichts eingefallen – du hast dich auf eine Überraschung gefreut.</p>
 			} else if p.Me.SurprisesOpen {
 				<p class="muted">Du warst offen für Überraschungen.</p>
 			} else {
@@ -110,26 +116,25 @@ templ mySurprisesCard(p ParticipantPage) {
 			}
 		} else {
 			<form method="post" action={ templ.URL(participantPath(p.Me.Token, "/surprises")) } class="switch-form stack" data-autosubmit>
+				<input type="hidden" name="changed" value=""/>
 				<input type="hidden" name="open" value="0"/>
 				<label class="switch">
 					<input type="checkbox" name="open" value="1" checked?={ p.Me.SurprisesOpen } role="switch"/>
 					<span class="switch-track" aria-hidden="true"></span>
 					<span>Andere dürfen Überraschungen für mich hinterlegen</span>
 				</label>
-				if p.Me.SurprisesOpen {
-					<input type="hidden" name="suffices" value="0"/>
-					<label class="switch">
-						<input type="checkbox" name="suffices" value="1" checked?={ p.Me.SurpriseSuffices } role="switch"/>
-						<span class="switch-track" aria-hidden="true"></span>
-						<span>Eine Überraschung genügt mir <span class="muted">– sobald mindestens eine für mich hinterlegt ist, brauche ich keinen eigenen Wunsch</span></span>
-					</label>
-				}
+				<input type="hidden" name="suffices" value="0"/>
+				<label class="switch">
+					<input type="checkbox" name="suffices" value="1" checked?={ p.Me.SurpriseSuffices } role="switch"/>
+					<span class="switch-track" aria-hidden="true"></span>
+					<span>Mir fällt nichts ein und ich freue mich über eine Überraschung <span class="muted">– sobald mindestens eine für mich hinterlegt ist, brauche ich keinen eigenen Wunsch</span></span>
+				</label>
 				<button class="btn btn-secondary btn-small js-hide" type="submit">Speichern</button>
 			</form>
 			if p.MyHiddenCount() > 0 {
 				<p class="hint">Schaltest du Überraschungen vor der Auslosung wieder ein, sind die gespeicherten Ideen wieder dabei.</p>
 			} else if p.Me.SurprisesOpen && p.Me.SurpriseSuffices {
-				<p class="hint">Schaltest du Überraschungen aus, genügt dir auch keine mehr als Wunsch.</p>
+				<p class="hint">Die anderen sehen, dass du dich über eine Überraschung freust. Schaltest du Überraschungen aus, endet das auch.</p>
 			}
 		}
 	</section>
