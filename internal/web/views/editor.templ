@@ -1,0 +1,22 @@
+package views
+
+// MarkdownEditor is a textarea with a small toolbar for people who have never
+// heard of Markdown. Without JavaScript it degrades to a plain textarea.
+templ MarkdownEditor(id, name, label, value, previewURL, placeholder string) {
+	<div class="md-editor" data-preview={ previewURL }>
+		<label for={ id } class="md-label">{ label }</label>
+		<div class="md-bar" role="toolbar" aria-label="Formatierung" hidden>
+			<button type="button" data-md="bold" title="Fett" aria-label="Fett"><b>F</b></button>
+			<button type="button" data-md="italic" title="Kursiv" aria-label="Kursiv"><i>K</i></button>
+			<button type="button" data-md="list" title="Aufzählung" aria-label="Aufzählung">• Liste</button>
+			<button type="button" data-md="link" title="Link einfügen" aria-label="Link einfügen">🔗 Link</button>
+			<span class="md-tabs">
+				<button type="button" data-md-tab="write" class="active" aria-pressed="true">Schreiben</button>
+				<button type="button" data-md-tab="preview" aria-pressed="false">Vorschau</button>
+			</span>
+		</div>
+		<textarea id={ id } name={ name } rows="7" maxlength="5000" placeholder={ placeholder }>{ value }</textarea>
+		<div class="md-preview prose" hidden aria-live="polite"></div>
+		<p class="hint">Markiere Text und nutze die Knöpfe für <b>fett</b>, <i>kursiv</i>, Listen oder Links. Ein Link wird auch automatisch erkannt, wenn du ihn einfach einfügst.</p>
+	</div>
+}

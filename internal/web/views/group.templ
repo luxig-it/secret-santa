@@ -1,0 +1,56 @@
+package views
+
+import "fmt"
+
+// Group lists every member with the three things everybody may know about
+// them: whether they entered a wish, how many surprise ideas they got, and
+// whether that makes them ready for the draw. Actions renders the optional
+// per-row controls of the page using it.
+templ Group(p CampaignPage, actions func(Member) templ.Component) {
+	<section class="card">
+		<div class="card-head">
+			<h2>Die Gruppe</h2>
+			<span class="muted">{ fmt.Sprintf("%d von %d bereit", p.ReadyCount(), len(p.Members)) }</span>
+		</div>
+		if len(p.Members) == 0 {
+			<p class="muted">Noch niemand dabei.</p>
+		} else {
+			<ul class="members">
+				for _, m := range p.Members {
+					<li class={ "member", templ.KV("member-me", m.IsMe) } data-member={ m.Name }>
+						<div class="member-name">
+							{ m.Name }
+							if m.IsMe {
+								<span class="muted">(du)</span>
+							}
+						</div>
+						<ul class="badges">
+							if m.HasWish() {
+								<li class="badge badge-yes">✓ Wunsch hinterlegt</li>
+							} else {
+								<li class="badge badge-no">✗ Noch kein Wunsch</li>
+							}
+							if m.Surprises > 0 {
+								<li class="badge badge-gift">🎁 { plural(m.Surprises, "Überraschung", "Überraschungen") } hinterlegt</li>
+							} else if m.SurprisesOpen {
+								<li class="badge badge-neutral">Offen für Überraschungen</li>
+							} else {
+								<li class="badge badge-neutral">Keine Überraschungen gewünscht</li>
+							}
+							if m.Ready() {
+								<li class="badge badge-ready">● Bereit zur Auslosung</li>
+							} else {
+								<li class="badge badge-wait">○ Noch nicht bereit</li>
+							}
+						</ul>
+						if actions != nil {
+							<div class="member-actions">
+								@actions(m)
+							</div>
+						}
+					</li>
+				}
+			</ul>
+		}
+	</section>
+}

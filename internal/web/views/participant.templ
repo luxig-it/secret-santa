@@ -1,0 +1,141 @@
+package views
+
+templ Participant(p ParticipantPage) {
+	@Layout(p.Campaign.Title) {
+		@CampaignHead(p.Campaign)
+		@FlashBox(p.Flash)
+		<section class="card card-accent">
+			<h2>Hallo { p.Me.Name }!</h2>
+			<p>Das ist <b>dein persönlicher Link</b>. Speichere ihn als Lesezeichen und gib ihn nicht weiter – wer ihn hat, sieht, wen du beschenkst.</p>
+			@CopyField("my-url", "Dein Link", p.MyURL)
+		</section>
+		if p.Receiver != nil {
+			@resultCard(p)
+		}
+		@wishCard(p)
+		@mySurprisesCard(p)
+		@Group(p.CampaignPage, participantActions(p))
+	}
+}
+
+templ resultCard(p ParticipantPage) {
+	<section class="card card-result" id="ergebnis">
+		<h2>🎉 Du beschenkst <span class="receiver">{ p.Receiver.Name }</span></h2>
+		<h3>Wunsch von { p.Receiver.Name }</h3>
+		<div class="prose box">
+			@templ.Raw(renderMarkdown(p.Receiver.Wishlist))
+		</div>
+		<h3>Überraschungsideen aus der Gruppe</h3>
+		if len(p.Surprises) == 0 {
+			<p class="muted">Für { p.Receiver.Name } wurden keine Überraschungsideen hinterlegt.</p>
+		} else {
+			<ul class="surprises">
+				for _, s := range p.Surprises {
+					<li class="box">
+						<div class="muted">Idee von { s.AuthorName }</div>
+						<div class="prose">
+							@templ.Raw(renderMarkdown(s.Body))
+						</div>
+					</li>
+				}
+			</ul>
+		}
+	</section>
+}
+
+templ wishCard(p ParticipantPage) {
+	<section class="card" id="wunsch">
+		<h2>Mein Wunsch</h2>
+		if p.Campaign.Drawn() {
+			if p.Me.HasWish() {
+				<div class="prose box">
+					@templ.Raw(renderMarkdown(p.Me.Wishlist))
+				</div>
+			}
+			<p class="muted">Die Auslosung ist erfolgt, dein Wunsch ist damit festgeschrieben.</p>
+		} else {
+			if !p.Me.HasWish() {
+				<p class="notice">Sobald du einen Wunsch hinterlegst, bist du bereit zur Auslosung. Ohne Wunsch kann nicht ausgelost werden.</p>
+			}
+			<form method="post" action={ templ.URL(participantPath(p.Me.Token, "/wish")) } class="stack">
+				@MarkdownEditor("wishlist", "wishlist", "Was wünschst du dir?", p.Me.Wishlist, participantPath(p.Me.Token, "/preview"), "z. B.\n- ein gutes Buch\n- Schokolade")
+				<button class="btn" type="submit">Wunsch speichern</button>
+			</form>
+		}
+	</section>
+}
+
+templ mySurprisesCard(p ParticipantPage) {
+	<section class="card" id="ueberraschungen">
+		<h2>Überraschungen für mich</h2>
+		if !p.Campaign.Drawn() {
+			<p>
+				Andere können für dich eine Überraschungsidee hinterlegen. Du erfährst nur, <em>dass</em> es welche gibt – lesen kann sie nur, wer dich zugelost bekommt.
+			</p>
+		}
+		if n := p.MySurpriseCount(); n > 0 {
+			<p class="notice notice-gift">🎁 Für dich { pluralWas(n) } { plural(n, "Überraschung", "Überraschungen") } hinterlegt.</p>
+		}
+		if p.Campaign.Drawn() {
+			if p.Me.SurprisesOpen {
+				<p class="muted">Du warst offen für Überraschungen.</p>
+			} else {
+				<p class="muted">Du wolltest keine Überraschungen.</p>
+			}
+		} else {
+			<form method="post" action={ templ.URL(participantPath(p.Me.Token, "/surprises")) } class="switch-form" data-autosubmit>
+				<input type="hidden" name="open" value="0"/>
+				<label class="switch">
+					<input type="checkbox" name="open" value="1" checked?={ p.Me.SurprisesOpen } role="switch"/>
+					<span class="switch-track" aria-hidden="true"></span>
+					<span>Andere dürfen Überraschungen für mich hinterlegen</span>
+				</label>
+				<button class="btn btn-secondary btn-small js-hide" type="submit">Speichern</button>
+			</form>
+			if !p.Me.SurprisesOpen && p.MySurpriseCount() > 0 {
+				<p class="hint">Bereits hinterlegte Ideen bleiben erhalten, es kommen nur keine neuen hinzu.</p>
+			}
+		}
+	</section>
+}
+
+func participantActions(p ParticipantPage) func(Member) templ.Component {
+	return func(m Member) templ.Component { return surpriseAction(p, m) }
+}
+
+templ surpriseAction(p ParticipantPage, m Member) {
+	if !m.IsMe && !p.Campaign.Drawn() {
+		if m.ByMe {
+			<a class="btn btn-secondary btn-small" href={ templ.URL(idPath(participantPath(p.Me.Token, "/s"), m.ID, "")) }>Meine Überraschung bearbeiten</a>
+		} else if m.SurprisesOpen {
+			<a class="btn btn-secondary btn-small" href={ templ.URL(idPath(participantPath(p.Me.Token, "/s"), m.ID, "")) }>Überraschung hinterlegen</a>
+		}
+	}
+}
+
+func pluralWas(n int) string {
+	if n == 1 {
+		return "wurde"
+	}
+	return "wurden"
+}
+
+templ SurpriseEdit(p SurprisePage) {
+	@Layout("Überraschung für " + p.Recipient.Name) {
+		<p><a href={ templ.URL(participantPath(p.Me.Token, "")) }>← Zurück zur Übersicht</a></p>
+		<section class="card">
+			<h1>Überraschung für { p.Recipient.Name }</h1>
+			@FlashBox(p.Flash)
+			<p>Hinterlege eine Idee für { p.Recipient.Name }. Nur du kannst sie lesen. Wer { p.Recipient.Name } zugelost bekommt, sieht sie nach der Auslosung – egal, ob du das selbst bist oder jemand anderes. { p.Recipient.Name } selbst sieht nur, dass eine Überraschung hinterlegt wurde.</p>
+			<form method="post" action={ templ.URL(idPath(participantPath(p.Me.Token, "/s"), p.Recipient.ID, "")) } class="stack">
+				@MarkdownEditor("body", "body", "Deine Idee", p.Body, participantPath(p.Me.Token, "/preview"), "z. B. Sie liebt Kräutertee – vielleicht eine schöne Teedose?")
+				<div class="row">
+					<button class="btn" type="submit">Überraschung speichern</button>
+					if p.Exists {
+						<button class="btn btn-danger" type="submit" name="delete" value="1" formnovalidate data-confirm="Diese Überraschungsidee löschen?">Löschen</button>
+					}
+				</div>
+			</form>
+		</section>
+	}
+}
