@@ -67,13 +67,20 @@
   document.addEventListener("submit", (ev) => {
     const btn = ev.submitter;
     const msg = (btn && btn.dataset.confirm) || ev.target.dataset.confirm;
-    if (msg && !confirm(msg)) ev.preventDefault();
+    if (msg && !confirm(msg)) {
+      ev.preventDefault();
+      return;
+    }
+    if (!ev.defaultPrevented) rememberScroll(ev.target, ev.submitter || ev.target._changed);
   });
 
   // Switches save as soon as they change: every control of a form marked
   // data-autosubmit, or a single control marked so inside another form.
   for (const form of document.querySelectorAll("form[data-autosubmit]")) {
-    form.addEventListener("change", () => form.requestSubmit());
+    form.addEventListener("change", (ev) => {
+      form._changed = ev.target;
+      form.requestSubmit();
+    });
   }
   for (const input of document.querySelectorAll("input[data-autosubmit]")) {
     input.addEventListener("change", () => {
@@ -83,6 +90,7 @@
         input.checked = false;
         return;
       }
+      input.form._changed = input;
       input.form.requestSubmit();
     });
   }
@@ -208,4 +216,73 @@
     // Submitting from the preview tab must still send the text.
     ed.closest("form")?.addEventListener("submit", () => (ta.hidden = false));
   }
+
+  // --- Keep the scroll position across a save --------------------------------
+  //
+  // Every form answers with a redirect back to the page, which would land at
+  // the top. Before submitting, remember where the clicked button or flipped
+  // switch sat on screen, and put it back there after the reload – even if
+  // content above it changed, or the form itself shrank. This runs last, once
+  // everything above (like the editor toolbar) has its final size.
+
+  const SCROLL_KEY = "scroll-restore";
+  // A saved position is only used by the page that saved it, right after the
+  // redirect; anything else (an error page, a redirect elsewhere) drops it.
+  const SCROLL_TTL = 10_000;
+
+  function anchorKey(el) {
+    if (!el) return "";
+    return [el.tagName, el.name || "", el.value || "", el.name ? "" : el.textContent.trim()].join("|");
+  }
+  const visible = (el) => el.closest("label") || el;
+
+  function findAnchor(saved) {
+    const form = [...document.forms].find((f) => f.getAttribute("action") === saved.action);
+    if (!form) return null;
+    if (saved.anchor) {
+      const el = [...form.elements].find((e) => e.type !== "hidden" && anchorKey(e) === saved.anchor);
+      if (el) return visible(el);
+    }
+    return form;
+  }
+
+  function restoreScroll() {
+    let saved = null;
+    try {
+      saved = JSON.parse(sessionStorage.getItem(SCROLL_KEY));
+      sessionStorage.removeItem(SCROLL_KEY);
+    } catch {}
+    if (!saved || saved.path !== location.pathname || Date.now() - saved.at > SCROLL_TTL || !(saved.y > 0)) return;
+
+    // The page-level notice. An error stays where it is and the page stays at
+    // the top, so it cannot be missed; a confirmation becomes a toast, since
+    // at the top it would now be out of sight. Taking it out of the flow
+    // before measuring keeps it from shifting the page.
+    const flash = document.querySelector("main > .flash");
+    if (flash && flash.classList.contains("flash-error")) return;
+    if (flash) {
+      flash.classList.add("flash-toast");
+      const hide = () => flash.classList.add("flash-toast-gone");
+      flash.addEventListener("click", hide);
+      setTimeout(hide, 4000);
+    }
+    const el = findAnchor(saved);
+    const y = el ? window.scrollY + el.getBoundingClientRect().top - saved.top : saved.y;
+    window.scrollTo(0, Math.max(0, y));
+  }
+
+  function rememberScroll(form, anchor) {
+    try {
+      const el = anchor ? visible(anchor) : form;
+      sessionStorage.setItem(SCROLL_KEY, JSON.stringify({
+        path: location.pathname,
+        at: Date.now(),
+        y: Math.round(window.scrollY),
+        action: form.getAttribute("action"),
+        anchor: anchorKey(anchor),
+        top: Math.round(el.getBoundingClientRect().top),
+      }));
+    } catch {}
+  }
+  restoreScroll();
 })();
