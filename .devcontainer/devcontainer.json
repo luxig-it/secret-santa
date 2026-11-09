@@ -1,0 +1,48 @@
+{
+  "name": "secret-santa",
+  "image": "mcr.microsoft.com/devcontainers/go:1-bookworm",
+  "features": {
+    "ghcr.io/devcontainers/features/docker-in-docker:2": {},
+    "ghcr.io/devcontainers/features/github-cli:1": {},
+    "ghcr.io/devcontainers/features/node:1": { "version": "lts" }
+  },
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "golang.go",
+        "a-h.templ",
+        "ms-azuretools.vscode-containers"
+      ],
+      "settings": {
+        "go.lintTool": "staticcheck",
+        "go.useLanguageServer": true,
+        "editor.formatOnSave": true,
+        "[go]": {
+          "editor.defaultFormatter": "golang.go"
+        },
+        "[templ]": {
+          "editor.defaultFormatter": "a-h.templ"
+        },
+        "files.insertFinalNewline": true
+      }
+    }
+  },
+  "portsAttributes": {
+    "8080": {
+      "label": "secret-santa"
+    }
+  },
+  "mounts": [
+    "source=secret-santa-gomodcache,target=/go/pkg/mod,type=volume",
+    "source=secret-santa-home,target=/home/vscode,type=volume"
+  ],
+  "containerEnv": {
+    "GOTOOLCHAIN": "auto",
+    "SECRET_SANTA_DB": "/workspaces/secret-santa/data/secret-santa.db"
+  },
+  "remoteEnv": {
+    "PATH": "${containerEnv:PATH}:/home/vscode/.local/bin"
+  },
+  "postCreateCommand": "./.devcontainer/post-create.sh",
+  "remoteUser": "vscode"
+}

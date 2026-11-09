@@ -1,0 +1,8 @@
+/secret-santa
+/data/
+/dist/
+*.db
+*.db-shm
+*.db-wal
+.env
+.claude/settings.local.json
