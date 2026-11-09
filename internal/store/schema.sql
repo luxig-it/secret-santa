@@ -16,7 +16,8 @@ CREATE TABLE IF NOT EXISTS participant (
     name        TEXT    NOT NULL,
     email       TEXT    NOT NULL DEFAULT '',
     wishlist    TEXT    NOT NULL DEFAULT '',
-    ready       INTEGER NOT NULL DEFAULT 0,
+    -- Whether other participants may leave surprise ideas for this person.
+    surprises_open INTEGER NOT NULL DEFAULT 1,
     token       TEXT    NOT NULL UNIQUE,
     created_at  TEXT    NOT NULL
 );
@@ -39,3 +40,20 @@ CREATE TABLE IF NOT EXISTS assignment (
     receiver_id INTEGER NOT NULL REFERENCES participant(id) ON DELETE CASCADE,
     PRIMARY KEY (campaign_id, giver_id)
 );
+
+-- An idea one participant leaves for another. Only its author can read it
+-- before the draw; afterwards whoever drew the recipient sees it too. The
+-- recipient never does. One idea per author and recipient, edited in place.
+CREATE TABLE IF NOT EXISTS surprise (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    campaign_id  INTEGER NOT NULL REFERENCES campaign(id) ON DELETE CASCADE,
+    author_id    INTEGER NOT NULL REFERENCES participant(id) ON DELETE CASCADE,
+    recipient_id INTEGER NOT NULL REFERENCES participant(id) ON DELETE CASCADE,
+    body         TEXT    NOT NULL,
+    updated_at   TEXT    NOT NULL,
+    UNIQUE (author_id, recipient_id)
+);
+
+CREATE INDEX IF NOT EXISTS surprise_recipient ON surprise(recipient_id);
+CREATE INDEX IF NOT EXISTS surprise_campaign ON surprise(campaign_id);
+CREATE INDEX IF NOT EXISTS campaign_organizer ON campaign(organizer_label);
