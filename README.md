@@ -7,7 +7,9 @@ The interface is German.
 ## How it works
 
 1. **Organizer** – logs in with an organizer key, creates a campaign (title,
-   optional budget and planned draw date) and shares the join link.
+   optional budget, planned draw date and a greeting in Markdown) and shares
+   the join link. The greeting shows on the join page and at the top of every
+   participant's page.
 2. **Joining** – everybody opens the join link, enters their name and gets a
    private link. There are no accounts; the link *is* the login.
 3. **Wishes** – everybody enters a wish in a small Markdown editor (toolbar for
@@ -37,7 +39,8 @@ The interface is German.
    themselves, no pairs that only gift each other), honouring the organizer's
    exclusions.
 7. **Result** – everybody now sees whom they give to, that person's wish and
-   every surprise idea left for them. After the draw nothing can be changed.
+   every surprise idea left for them. After the draw nothing can be changed,
+   except the organizer's greeting, which affects nobody's assignment.
 
 The organizer page deliberately shows neither wishes, ideas nor the
 assignment. It does let the organizer copy each participant's personal link,

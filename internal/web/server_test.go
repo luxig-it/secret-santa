@@ -728,3 +728,58 @@ func TestStaticFilesRevalidateCheaply(t *testing.T) {
 		t.Fatalf("revalidation: %d, want 304", res.StatusCode)
 	}
 }
+
+func TestGreeting(t *testing.T) {
+	h := newHarness(t)
+	c := h.client()
+	h.post(c, "/login", url.Values{"token": {orgSecret}})
+	_, loc := h.post(c, "/organizer/campaigns", url.Values{"title": {"Büro"}, "greeting": {"Wir tauschen am **19.12.** <script>x</script>"}})
+	org := tokenOf(t, loc)
+	camp, _ := h.st.CampaignByOrganizerToken(t.Context(), org)
+	ben := h.join(camp.JoinToken, "Ben")
+	anna := h.join(camp.JoinToken, "Anna")
+
+	for _, path := range []string{"/j/" + camp.JoinToken, "/p/" + ben} {
+		_, page := h.get(c, path)
+		if !strings.Contains(page, "<strong>19.12.</strong>") || strings.Contains(page, "<script>x") {
+			t.Errorf("%s: greeting missing or unsafe", path)
+		}
+	}
+	// The facts sit in the greeting card on the participant page.
+	if _, page := h.get(c, "/p/"+ben); !strings.Contains(page, `class="card card-accent"`) || !strings.Contains(page, `<dl class="facts">`) {
+		t.Error("participant page lacks the facts")
+	}
+
+	h.post(c, "/p/"+ben+"/wish", url.Values{"wishlist": {"x"}})
+	h.post(c, "/p/"+anna+"/wish", url.Values{"wishlist": {"y"}})
+	if _, loc := h.post(c, "/o/"+org+"/draw", nil); !strings.Contains(loc, "n=drawn") {
+		t.Fatalf("draw: %q", loc)
+	}
+	if _, loc := h.post(c, "/o/"+org+"/greeting", url.Values{"greeting": {"Frohes Fest"}}); !strings.Contains(loc, "n=greeting") {
+		t.Fatalf("edit after draw: %q", loc)
+	}
+	if _, page := h.get(c, "/p/"+ben); !strings.Contains(page, "Frohes Fest") {
+		t.Error("edited greeting not shown")
+	}
+}
+
+func TestOrganizerPreviewsNeedAccess(t *testing.T) {
+	h := newHarness(t)
+	if res, _ := http.PostForm(h.srv.URL+"/organizer/preview", url.Values{"text": {"x"}}); res.StatusCode != http.StatusForbidden {
+		t.Errorf("create-form preview without login: %d", res.StatusCode)
+	}
+	if res, _ := http.PostForm(h.srv.URL+"/o/nope/preview", url.Values{"text": {"x"}}); res.StatusCode != http.StatusNotFound {
+		t.Errorf("manage preview with a bad token: %d", res.StatusCode)
+	}
+	c := h.client()
+	h.post(c, "/login", url.Values{"token": {orgSecret}})
+	res, err := c.PostForm(h.srv.URL+"/organizer/preview", url.Values{"text": {"**ok**"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, _ := io.ReadAll(res.Body)
+	res.Body.Close()
+	if !strings.Contains(string(b), "<strong>ok</strong>") {
+		t.Errorf("preview with login: %q", b)
+	}
+}

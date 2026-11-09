@@ -29,7 +29,8 @@ rules; they are the spec.
 - Readiness is `Participant.ReadyWith(surpriseCount)`: with
   `surprise_suffices`, at least one surprise idea; otherwise a counting wish
   and no `needs_time`. The
-  draw checks it inside its transaction; views use `Member.Ready()`. After the draw nothing changes any more.
+  draw checks it inside its transaction; views use `Member.Ready()`. After the draw nothing changes any more – the one exception is
+  the organizer's greeting (`SetGreeting`), which touches no assignment.
 - Every store write that depends on campaign state checks it inside its
   transaction (`requireOpen`); the DSN takes the write lock up front.
 - Pages carry secrets in their URL: keep `Referrer-Policy: no-referrer`,

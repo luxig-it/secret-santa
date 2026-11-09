@@ -61,6 +61,7 @@ type Campaign struct {
 	Title          string
 	Budget         string
 	DrawDate       string
+	Greeting       string
 	JoinToken      string
 	OrganizerToken string
 	OrganizerLabel string
@@ -182,6 +183,7 @@ func Open(path string) (*Store, error) {
 var addedColumns = []struct{ table, column, definition string }{
 	{"participant", "needs_time", "INTEGER NOT NULL DEFAULT 0"},
 	{"participant", "surprise_suffices", "INTEGER NOT NULL DEFAULT 0"},
+	{"campaign", "greeting", "TEXT NOT NULL DEFAULT ''"},
 }
 
 // migrate runs in one transaction, which takes the write lock up front, so
@@ -211,13 +213,13 @@ func migrate(db *sql.DB) error {
 // Close releases the database handle.
 func (s *Store) Close() error { return s.db.Close() }
 
-const campaignColumns = `id, title, budget, draw_date, join_token,
+const campaignColumns = `id, title, budget, draw_date, greeting, join_token,
 	organizer_token, organizer_label, state, created_at`
 
 func scanCampaign(row interface{ Scan(...any) error }) (Campaign, error) {
 	var c Campaign
 	var created string
-	err := row.Scan(&c.ID, &c.Title, &c.Budget, &c.DrawDate, &c.JoinToken,
+	err := row.Scan(&c.ID, &c.Title, &c.Budget, &c.DrawDate, &c.Greeting, &c.JoinToken,
 		&c.OrganizerToken, &c.OrganizerLabel, &c.State, &created)
 	if errors.Is(err, sql.ErrNoRows) {
 		return Campaign{}, ErrNotFound
@@ -230,11 +232,12 @@ func scanCampaign(row interface{ Scan(...any) error }) (Campaign, error) {
 }
 
 // CreateCampaign stores a new campaign with freshly generated tokens.
-func (s *Store) CreateCampaign(ctx context.Context, title, budget, drawDate, organizerLabel string) (Campaign, error) {
+func (s *Store) CreateCampaign(ctx context.Context, title, budget, drawDate, greeting, organizerLabel string) (Campaign, error) {
 	c := Campaign{
 		Title:          title,
 		Budget:         budget,
 		DrawDate:       drawDate,
+		Greeting:       greeting,
 		JoinToken:      token.New(),
 		OrganizerToken: token.New(),
 		OrganizerLabel: organizerLabel,
@@ -242,10 +245,10 @@ func (s *Store) CreateCampaign(ctx context.Context, title, budget, drawDate, org
 		CreatedAt:      time.Now().UTC(),
 	}
 	res, err := s.db.ExecContext(ctx,
-		`INSERT INTO campaign (title, budget, draw_date, join_token,
+		`INSERT INTO campaign (title, budget, draw_date, greeting, join_token,
 			organizer_token, organizer_label, state, created_at)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-		c.Title, c.Budget, c.DrawDate, c.JoinToken,
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		c.Title, c.Budget, c.DrawDate, c.Greeting, c.JoinToken,
 		c.OrganizerToken, c.OrganizerLabel, c.State, c.CreatedAt.Format(time.RFC3339))
 	if err != nil {
 		return Campaign{}, fmt.Errorf("insert campaign: %w", err)
@@ -254,6 +257,20 @@ func (s *Store) CreateCampaign(ctx context.Context, title, budget, drawDate, org
 		return Campaign{}, err
 	}
 	return c, nil
+}
+
+// SetGreeting replaces the organizer's welcome text. Unlike wishes it stays
+// editable after the draw: it is the organizer's own text and nobody's view
+// of the assignment depends on it.
+func (s *Store) SetGreeting(ctx context.Context, campaignID int64, text string) error {
+	res, err := s.db.ExecContext(ctx, `UPDATE campaign SET greeting = ? WHERE id = ?`, text, campaignID)
+	if err != nil {
+		return err
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return ErrNotFound
+	}
+	return nil
 }
 
 // CampaignByJoinToken looks up a campaign by its public join link.

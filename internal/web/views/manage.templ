@@ -15,6 +15,14 @@ templ Manage(p ManagePage) {
 				@CopyField("join-url", "Einladungslink", p.JoinURL)
 			}
 		</section>
+		<section class="card" id="begruessung">
+			<h2>Begrüßungstext</h2>
+			<p class="hint">Optional. Er steht auf der Einladungsseite und oben auf der persönlichen Seite aller Teilnehmer – zum Beispiel ein paar Worte zum Ablauf oder zur Übergabe der Geschenke.</p>
+			<form method="post" action={ templ.URL(organizerPath(p.Campaign.OrganizerToken, "/greeting")) } class="stack">
+				@MarkdownEditor("greeting", "greeting", "Begrüßung", p.Campaign.Greeting, organizerPath(p.Campaign.OrganizerToken, "/preview"), "z. B. Die Geschenke tauschen wir bei der Weihnachtsfeier am 19.12. aus.")
+				<button class="btn" type="submit">Begrüßung speichern</button>
+			</form>
+		</section>
 		<section class="card">
 			<h2>Verwaltung</h2>
 			<p>Über diesen Link kommst du jederzeit zurück auf diese Seite – auch ohne Anmeldung. Gib ihn nur an Leute weiter, die mitorganisieren sollen.</p>

@@ -174,8 +174,9 @@
           method: "POST",
           body: new URLSearchParams({ text: ta.value }),
         });
-        if (!res.ok) throw new Error(res.status);
-        // The server renders with raw HTML stripped, so this is safe.
+        // The server renders with raw HTML stripped, so this is safe. A 403
+        // carries an explanation worth showing.
+        if (!res.ok && res.status !== 403) throw new Error(res.status);
         pv.innerHTML = await res.text();
       } catch {
         pv.innerHTML = '<p class="muted">Die Vorschau ist gerade nicht verfügbar.</p>';

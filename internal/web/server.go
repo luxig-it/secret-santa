@@ -99,12 +99,15 @@ func New(cfg config.Config, st *store.Store, log *slog.Logger) http.Handler {
 	mux.HandleFunc("POST /logout", s.logout)
 	mux.HandleFunc("GET /organizer", s.organizer)
 	mux.HandleFunc("POST /organizer/campaigns", s.createCampaign)
+	mux.HandleFunc("POST /organizer/preview", s.organizerPreview)
 
 	mux.HandleFunc("GET /o/{token}", s.manage)
 	mux.HandleFunc("POST /o/{token}/participants/{id}/delete", s.deleteParticipant)
 	mux.HandleFunc("POST /o/{token}/exclusions", s.addExclusion)
 	mux.HandleFunc("POST /o/{token}/exclusions/{id}/delete", s.deleteExclusion)
 	mux.HandleFunc("POST /o/{token}/draw", s.draw)
+	mux.HandleFunc("POST /o/{token}/greeting", s.saveGreeting)
+	mux.HandleFunc("POST /o/{token}/preview", s.managePreview)
 
 	mux.HandleFunc("GET /j/{token}", s.joinPage)
 	mux.HandleFunc("POST /j/{token}", s.join)
@@ -252,6 +255,8 @@ var notices = map[string]views.Flash{
 	"suffices-opened":      {Kind: "ok", Text: "Alles klar: Überraschungen für dich sind jetzt eingeschaltet. Sobald eine hinterlegt ist, bist du auch ohne eigenen Wunsch bereit."},
 	"closed-suffices-wish": {Kind: "ok", Text: "Es können keine neuen Überraschungen mehr für dich hinterlegt werden. Dein eingetragener Wunsch zählt jetzt wieder."},
 	"thinking-needs-wish":  {Kind: "error", Text: "Bedenkzeit gibt es nur für einen eingetragenen Wunsch – schreib zuerst etwas hinein."},
+	"greeting":             {Kind: "ok", Text: "Der Begrüßungstext ist gespeichert."},
+	"greeting-cleared":     {Kind: "ok", Text: "Der Begrüßungstext ist entfernt."},
 	"wish-back":            {Kind: "ok", Text: "Dein Wunsch zählt wieder."},
 	"suffices-off":         {Kind: "ok", Text: "Alles klar – trag jetzt deinen Wunsch ein, um bereit zu sein."},
 	"surprise":             {Kind: "ok", Text: "Deine Überraschung ist gespeichert."},
@@ -377,7 +382,8 @@ func (s *Server) createCampaign(w http.ResponseWriter, r *http.Request) {
 	title, okTitle := field(r, "title", maxTitle)
 	budget, okBudget := field(r, "budget", maxBudget)
 	date, _ := field(r, "draw_date", 10)
-	form := views.CampaignForm{Title: title, Budget: budget, DrawDate: date}
+	greeting, okGreeting := field(r, "greeting", maxText)
+	form := views.CampaignForm{Title: title, Budget: budget, DrawDate: date, Greeting: greeting}
 
 	var problem string
 	switch {
@@ -385,6 +391,8 @@ func (s *Server) createCampaign(w http.ResponseWriter, r *http.Request) {
 		problem = "Bitte gib einen Titel an."
 	case !okTitle || !okBudget:
 		problem = "Titel oder Budget sind zu lang."
+	case !okGreeting:
+		problem = "Der Begrüßungstext ist zu lang (höchstens 5000 Zeichen)."
 	case date != "" && !validDate(date):
 		problem = "Das Datum der Auslosung ist ungültig."
 	}
@@ -393,7 +401,7 @@ func (s *Server) createCampaign(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	c, err := s.store.CreateCampaign(r.Context(), title, budget, date, org.Label)
+	c, err := s.store.CreateCampaign(r.Context(), title, budget, date, greeting, org.Label)
 	if err != nil {
 		s.fail(w, r, err)
 		return
@@ -808,13 +816,43 @@ func (s *Server) saveSurprise(w http.ResponseWriter, r *http.Request) {
 	s.afterChange(w, r, "/p/"+me.Token, s.store.SaveSurprise(r.Context(), c.ID, me.ID, rec.ID, body), notice)
 }
 
-// preview renders Markdown for the editor's preview tab. It sits behind a
-// participant link so it is not an open rendering service.
+// The editor's preview tab renders Markdown on the server, so it looks
+// exactly like the saved text will. Each page that has an editor gets its
+// own endpoint behind that page's access check, so none of them is an open
+// rendering service.
+
+// preview serves the participant's editors.
 func (s *Server) preview(w http.ResponseWriter, r *http.Request) {
 	if _, err := s.store.ParticipantByToken(r.Context(), r.PathValue("token")); err != nil {
 		s.fail(w, r, err)
 		return
 	}
+	renderPreview(w, r)
+}
+
+// managePreview serves the greeting editor on a campaign's management page.
+func (s *Server) managePreview(w http.ResponseWriter, r *http.Request) {
+	if _, err := s.store.CampaignByOrganizerToken(r.Context(), r.PathValue("token")); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	renderPreview(w, r)
+}
+
+// organizerPreview serves the greeting editor in the create form.
+func (s *Server) organizerPreview(w http.ResponseWriter, r *http.Request) {
+	if _, ok := s.currentOrganizer(r); !ok {
+		// Tell the editor why, so the organizer does not type on and lose
+		// the form when submitting it redirects to the login.
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.WriteHeader(http.StatusForbidden)
+		w.Write([]byte(`<p class="muted">Deine Anmeldung ist abgelaufen. Bitte kopiere deinen Text und melde dich neu an.</p>`))
+		return
+	}
+	renderPreview(w, r)
+}
+
+func renderPreview(w http.ResponseWriter, r *http.Request) {
 	text, ok := field(r, "text", maxText)
 	if !ok {
 		http.Error(w, "too long", http.StatusRequestEntityTooLarge)
@@ -826,4 +864,22 @@ func (s *Server) preview(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Write([]byte(markdown.Render(text)))
+}
+
+// saveGreeting updates the organizer's welcome text, also after the draw.
+func (s *Server) saveGreeting(w http.ResponseWriter, r *http.Request) {
+	c, ok := s.organizerAction(w, r)
+	if !ok {
+		return
+	}
+	text, ok := field(r, "greeting", maxText)
+	if !ok {
+		redirect(w, r, "/o/"+c.OrganizerToken, "too-long")
+		return
+	}
+	notice := "greeting"
+	if text == "" {
+		notice = "greeting-cleared"
+	}
+	s.afterChange(w, r, "/o/"+c.OrganizerToken, s.store.SetGreeting(r.Context(), c.ID, text), notice)
 }

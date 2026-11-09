@@ -4,6 +4,7 @@ templ Join(p JoinPage) {
 	@CampaignLayout(p.Campaign.Title, p.Campaign.Title) {
 		@CampaignHead(p.Campaign)
 		@FlashBox(p.Flash)
+		@GreetingCard(p.Campaign)
 		if p.Campaign.Drawn() {
 			<section class="card">
 				<p>Diese Kampagne ist bereits ausgelost, ein Beitritt ist nicht mehr möglich. Wenn du schon dabei bist, öffne deinen persönlichen Link.</p>
