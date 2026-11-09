@@ -1,0 +1,95 @@
+package views
+
+import "github.com/luxig-it/secret-santa/internal/store"
+
+templ Layout(title string) {
+	<!DOCTYPE html>
+	<html lang="de">
+		<head>
+			<meta charset="utf-8"/>
+			<meta name="viewport" content="width=device-width, initial-scale=1"/>
+			<meta name="referrer" content="no-referrer"/>
+			<meta name="robots" content="noindex, nofollow"/>
+			<title>{ title } · Wichteln</title>
+			<link rel="icon" href={ Asset("favicon.svg") } type="image/svg+xml"/>
+			<link rel="stylesheet" href={ Asset("app.css") }/>
+			<script src={ Asset("app.js") } defer></script>
+		</head>
+		<body>
+			<header class="site">
+				<a class="brand" href="/">🎁 Wichteln</a>
+			</header>
+			<main>
+				{ children... }
+			</main>
+			<footer class="site">Geheim wichteln – ohne Konto, nur mit deinem persönlichen Link.</footer>
+		</body>
+	</html>
+}
+
+templ FlashBox(f Flash) {
+	if f.Text != "" {
+		<p class={ "flash", "flash-" + f.Kind } role={ flashRole(f) }>{ f.Text }</p>
+	}
+}
+
+func flashRole(f Flash) string {
+	if f.Kind == "error" {
+		return "alert"
+	}
+	return "status"
+}
+
+templ CampaignHead(c store.Campaign) {
+	<section class="campaign-head">
+		<h1>{ c.Title }</h1>
+		<dl class="facts">
+			if c.Budget != "" {
+				<div><dt>Budget</dt><dd>{ c.Budget }</dd></div>
+			}
+			if c.DrawDate != "" {
+				<div><dt>Auslosung</dt><dd>{ GermanDate(c.DrawDate) }</dd></div>
+			}
+			<div>
+				<dt>Status</dt>
+				<dd>
+					if c.Drawn() {
+						<span class="pill pill-done">Ausgelost</span>
+					} else {
+						<span class="pill pill-open">Offen</span>
+					}
+				</dd>
+			</div>
+		</dl>
+	</section>
+}
+
+templ CopyField(id, label, value string) {
+	<div class="copy-field">
+		<label for={ id }>{ label }</label>
+		<div class="copy-row">
+			<input id={ id } type="text" readonly value={ value }/>
+			<button type="button" class="btn btn-secondary" data-copy={ id }>Kopieren</button>
+		</div>
+	</div>
+}
+
+templ NotFound() {
+	@Layout("Nicht gefunden") {
+		<section class="card center">
+			<h1>Dieser Link führt nirgendwohin</h1>
+			<p>Vielleicht wurde er nicht vollständig kopiert, oder die Kampagne bzw. der Eintrag wurde gelöscht.</p>
+			<p><a href="/">Zur Startseite</a></p>
+		</section>
+	}
+}
+
+templ ErrorPage(msg string) {
+	@Layout("Fehler") {
+		<section class="card center">
+			<h1>Da ist etwas schiefgelaufen</h1>
+			<p>{ msg }</p>
+			<p><a href="/">Zur Startseite</a></p>
+		</section>
+	}
+}

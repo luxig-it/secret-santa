@@ -1,0 +1,99 @@
+package views
+
+import "fmt"
+
+templ Manage(p ManagePage) {
+	@Layout(p.Campaign.Title) {
+		@CampaignHead(p.Campaign)
+		@FlashBox(p.Flash)
+		<section class="card">
+			<h2>Einladen</h2>
+			if p.Campaign.Drawn() {
+				<p class="muted">Die Auslosung ist erfolgt, es kann niemand mehr beitreten.</p>
+			} else {
+				<p>Schick diesen Link an alle, die mitmachen sollen – auch an dich selbst, wenn du mitwichteln willst. Wer ihn öffnet, trägt sich mit Namen ein und bekommt einen eigenen, geheimen Link.</p>
+				@CopyField("join-url", "Einladungslink", p.JoinURL)
+			}
+		</section>
+		@Group(p.CampaignPage, manageActions(p))
+		if !p.Campaign.Drawn() {
+			@exclusionsCard(p)
+		}
+		@drawCard(p)
+		<section class="card">
+			<p class="hint">Speichere diese Seite als Lesezeichen – ihre Adresse ist dein Zugang zur Verwaltung dieser Kampagne. Wünsche, Überraschungsideen und die Zuordnung siehst du hier bewusst nicht.</p>
+		</section>
+	}
+}
+
+func manageActions(p ManagePage) func(Member) templ.Component {
+	if p.Campaign.Drawn() {
+		return nil
+	}
+	return func(m Member) templ.Component { return removeButton(p, m) }
+}
+
+templ removeButton(p ManagePage, m Member) {
+	<form method="post" action={ templ.URL(idPath(organizerPath(p.Campaign.OrganizerToken, "/participants"), m.ID, "/delete")) } data-confirm={ m.Name + " wirklich aus der Kampagne entfernen? Wunsch und Überraschungsideen gehen dabei verloren." }>
+		<button class="btn btn-danger btn-small" type="submit">Entfernen</button>
+	</form>
+}
+
+templ exclusionsCard(p ManagePage) {
+	<section class="card">
+		<h2>Ausschlüsse</h2>
+		<p>Paare, die sich gegenseitig nicht ziehen sollen – zum Beispiel weil sie sich ohnehin beschenken.</p>
+		if len(p.Exclusions) > 0 {
+			<ul class="exclusions">
+				for _, e := range p.Exclusions {
+					<li>
+						<span>{ e.AName } ↔ { e.BName }</span>
+						<form method="post" action={ templ.URL(idPath(organizerPath(p.Campaign.OrganizerToken, "/exclusions"), e.ID, "/delete")) }>
+							<button class="btn btn-link" type="submit">Aufheben</button>
+						</form>
+					</li>
+				}
+			</ul>
+		}
+		if len(p.Members) >= 2 {
+			<form method="post" action={ templ.URL(organizerPath(p.Campaign.OrganizerToken, "/exclusions")) } class="inline-form">
+				<label class="sr-only" for="excl-a">Person 1</label>
+				<select id="excl-a" name="a" required>
+					for _, m := range p.Members {
+						<option value={ fmt.Sprint(m.ID) }>{ m.Name }</option>
+					}
+				</select>
+				<span>↔</span>
+				<label class="sr-only" for="excl-b">Person 2</label>
+				<select id="excl-b" name="b" required>
+					for i, m := range p.Members {
+						<option value={ fmt.Sprint(m.ID) } selected?={ i == 1 }>{ m.Name }</option>
+					}
+				</select>
+				<button class="btn btn-secondary" type="submit">Ausschließen</button>
+			</form>
+		} else {
+			<p class="muted">Sobald mindestens zwei Personen dabei sind, kannst du hier Paare festlegen.</p>
+		}
+	</section>
+}
+
+templ drawCard(p ManagePage) {
+	<section class="card">
+		<h2>Auslosung</h2>
+		if p.Campaign.Drawn() {
+			<p>✅ Die Paare sind ausgelost. Alle sehen jetzt über ihren persönlichen Link, wen sie beschenken.</p>
+		} else {
+			if len(p.Members) < 2 {
+				<p>Für eine Auslosung braucht es mindestens zwei Personen.</p>
+			} else if !p.AllReady() {
+				<p>Ausgelost werden kann, sobald alle einen Wunsch hinterlegt haben. Bereit sind gerade <b>{ fmt.Sprintf("%d von %d", p.ReadyCount(), len(p.Members)) }</b>.</p>
+			} else {
+				<p>Alle sind bereit. Nach der Auslosung kann niemand mehr beitreten, und Wünsche sowie Überraschungsideen lassen sich nicht mehr ändern.</p>
+			}
+			<form method="post" action={ templ.URL(organizerPath(p.Campaign.OrganizerToken, "/draw")) } data-confirm="Jetzt auslosen? Das lässt sich nicht rückgängig machen.">
+				<button class="btn btn-big" type="submit" disabled?={ !p.AllReady() }>Jetzt auslosen</button>
+			</form>
+		}
+	</section>
+}
