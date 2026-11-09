@@ -815,7 +815,7 @@ func TestEmailOffWhenNotConfigured(t *testing.T) {
 	_, join := h.setup()
 	ben := h.join(join, "Ben")
 	if _, page := h.get(h.client(), "/p/"+ben); strings.Contains(page, "✉ E-Mail") {
-		t.Error("e-mail button shown although mail is off")
+		t.Error("e-mail button or hint shown although mail is off")
 	}
 	if code, _ := h.post(h.client(), "/p/"+ben+"/email", url.Values{"email": {"ben@example.com"}}); code != 404 {
 		t.Errorf("e-mail post with mail off: %d", code)
@@ -830,10 +830,10 @@ func TestEmailPersonalAndAdminLink(t *testing.T) {
 	ben := h.join(join, "Ben")
 
 	_, page := h.get(c, "/p/"+ben)
-	if !strings.Contains(page, "✉ E-Mail") || !strings.Contains(page, `action="/p/`+ben+`/email"`) {
-		t.Fatal("participant page lacks the e-mail form")
+	if !strings.Contains(page, "✉ E-Mail") || !strings.Contains(page, `action="/p/`+ben+`/email"`) || !strings.Contains(page, "zuschicken lassen") {
+		t.Fatal("participant page lacks the e-mail form or the hint")
 	}
-	if _, page := h.get(c, "/o/"+org); !strings.Contains(page, `action="/o/`+org+`/email"`) || strings.Count(page, "✉ E-Mail") != 1 {
+	if _, page := h.get(c, "/o/"+org); !strings.Contains(page, `action="/o/`+org+`/email"`) || strings.Count(page, `class="email-send"`) != 1 {
 		t.Error("manage page should offer mail for the admin link only, not the join link")
 	}
 
