@@ -340,7 +340,7 @@ func (s *Server) home(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 	secret := strings.TrimSpace(r.PostFormValue("token"))
-	ip := clientIP(r)
+	ip := s.clientIP(r)
 	if !s.logins.allow(ip) {
 		s.log.Warn("organizer login throttled", "remote", ip)
 		s.render(w, r, http.StatusTooManyRequests, views.Home(errorFlash("Zu viele Fehlversuche. Bitte versuche es in ein paar Minuten noch einmal.")))
@@ -977,7 +977,7 @@ func (s *Server) mailLink(w http.ResponseWriter, r *http.Request, c store.Campai
 		redirect(w, r, back, "email-invalid")
 		return
 	}
-	ip := clientIP(r)
+	ip := s.clientIP(r)
 	switch {
 	case !s.mailsPerLink.take(key):
 		redirect(w, r, back, "email-limit")

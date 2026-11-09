@@ -1,8 +1,10 @@
 package store
 
 import (
+	"bytes"
 	"context"
 	"errors"
+	"os"
 	"path/filepath"
 	"testing"
 )
@@ -496,5 +498,30 @@ func TestGreeting(t *testing.T) {
 	}
 	if err := s.SetGreeting(ctx, 9999, "x"); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("unknown campaign: %v", err)
+	}
+}
+
+func TestBackup(t *testing.T) {
+	ctx := context.Background()
+	s := open(t)
+	c := mustCampaign(t, s)
+	mustJoin(t, s, c, "Anna", "socks")
+
+	var buf bytes.Buffer
+	if err := s.Backup(ctx, &buf); err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.HasPrefix(buf.Bytes(), []byte("SQLite format 3\x00")) {
+		t.Fatalf("backup is not an SQLite file (%d bytes)", buf.Len())
+	}
+	// The copy opens on its own and holds the data.
+	path := filepath.Join(t.TempDir(), "restored.db")
+	if err := os.WriteFile(path, buf.Bytes(), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	restored := openAt(t, path)
+	ps, err := restored.Participants(ctx, c.ID)
+	if err != nil || len(ps) != 1 || ps[0].Wishlist != "socks" {
+		t.Fatalf("restored participants = %+v, %v", ps, err)
 	}
 }

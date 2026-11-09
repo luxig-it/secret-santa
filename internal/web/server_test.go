@@ -920,3 +920,31 @@ func TestEmailBodyCarriesNoParticipantText(t *testing.T) {
 		t.Fatalf("mail carries the participant's name: %+v", fm.sent)
 	}
 }
+
+func TestClientIPTrustsOnlyTheConfiguredProxy(t *testing.T) {
+	proxies, _ := config.ParseProxies("172.16.0.0/12")
+	s := &Server{cfg: config.Config{TrustedProxies: proxies}}
+	req := func(remote, realIP string) *http.Request {
+		r := httptest.NewRequest("GET", "/", nil)
+		r.RemoteAddr = remote
+		if realIP != "" {
+			r.Header.Set("X-Real-IP", realIP)
+		}
+		return r
+	}
+	cases := []struct{ remote, header, want string }{
+		{"172.18.0.1:5555", "203.0.113.7", "203.0.113.7"},    // from the proxy: header counts
+		{"172.18.0.1:5555", "", "172.18.0.1"},                // proxy without header
+		{"172.18.0.1:5555", "not-an-ip", "172.18.0.1"},       // garbage header
+		{"198.51.100.4:5555", "203.0.113.7", "198.51.100.4"}, // a stranger faking it
+	}
+	for _, c := range cases {
+		if got := s.clientIP(req(c.remote, c.header)); got != c.want {
+			t.Errorf("remote %s, X-Real-IP %q: got %s, want %s", c.remote, c.header, got, c.want)
+		}
+	}
+	// Without any trusted proxy the header is never believed.
+	if got := (&Server{}).clientIP(req("172.18.0.1:5555", "203.0.113.7")); got != "172.18.0.1" {
+		t.Errorf("no trusted proxy: got %s", got)
+	}
+}

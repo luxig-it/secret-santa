@@ -103,3 +103,31 @@ func TestLoadEmail(t *testing.T) {
 		})
 	}
 }
+
+func TestPublicExampleKeysRejectedOnHTTPS(t *testing.T) {
+	for _, tc := range []struct {
+		base, tokens string
+		wantErr      bool
+	}{
+		{"https://wichteln.example.com", "carsten:REPLACE-WITH-A-LONG-RANDOM-KEY", true},
+		{"https://wichteln.example.com", "carsten:change-me,anna:x8f2kQ9zLpW3vN7a", true},
+		{"https://wichteln.example.com", "carsten:x8f2kQ9zLpW3vN7a", false},
+		{"http://localhost:8080", "dev:dev-organizer-token", false},
+	} {
+		t.Setenv("SECRET_SANTA_BASE_URL", tc.base)
+		t.Setenv("SECRET_SANTA_ORGANIZER_TOKENS", tc.tokens)
+		if _, err := Load(); (err != nil) != tc.wantErr {
+			t.Errorf("%s %s: err = %v, want error %v", tc.base, tc.tokens, err, tc.wantErr)
+		}
+	}
+}
+
+func TestParseProxies(t *testing.T) {
+	got, err := ParseProxies(" 172.16.0.0/12, 127.0.0.1 ,::1")
+	if err != nil || len(got) != 3 || got[0].String() != "172.16.0.0/12" || got[1].String() != "127.0.0.1/32" {
+		t.Fatalf("got %v, %v", got, err)
+	}
+	if _, err := ParseProxies("nginx"); err == nil {
+		t.Fatal("a hostname was accepted")
+	}
+}

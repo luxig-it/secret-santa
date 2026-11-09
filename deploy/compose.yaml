@@ -1,0 +1,38 @@
+# Production stack for a server where Plesk (or another web server) already
+# terminates TLS and proxies to the app. The app's port is bound to the
+# loopback interface only, so nothing but the local web server reaches it.
+# Settings and secrets live in .env next to this file.
+name: secret-santa
+
+services:
+  app:
+    # Deploy by changing SECRET_SANTA_VERSION in .env, then pull and up.
+    image: ghcr.io/luxig-it/secret-santa:${SECRET_SANTA_VERSION:?set SECRET_SANTA_VERSION in .env}
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      SECRET_SANTA_ADDR: ":8080"
+      SECRET_SANTA_DB: /data/secret-santa.db
+    ports:
+      - "127.0.0.1:${SECRET_SANTA_HOST_PORT:-8080}:8080"
+    volumes:
+      - data:/data
+    # Hardening: nothing to write but the database volume and a scratch
+    # /tmp, no Linux capabilities, no privilege escalation, bounded
+    # resources. The image itself runs as a non-root user.
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 256m
+    pids_limit: 128
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
+
+volumes:
+  data:

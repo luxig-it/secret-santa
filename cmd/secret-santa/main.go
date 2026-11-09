@@ -20,6 +20,13 @@ import (
 
 func main() {
 	log := slog.New(slog.NewTextHandler(os.Stderr, nil))
+	if len(os.Args) > 1 && os.Args[1] == "backup" {
+		if err := backup(); err != nil {
+			log.Error("backup", "err", err)
+			os.Exit(1)
+		}
+		return
+	}
 	if err := run(log); err != nil {
 		log.Error("fatal", "err", err)
 		os.Exit(1)
@@ -84,4 +91,20 @@ func mailer(cfg config.Config) mail.Sender {
 	}
 	s := cfg.SMTP
 	return mail.NewSMTP(s.Host, s.Port, s.User, s.Pass, s.From, cfg.SMTPInsecure)
+}
+
+// backup writes a consistent copy of the database to stdout, for
+// `docker compose exec -T app /secret-santa backup > file.db` while the
+// server keeps running.
+func backup() error {
+	cfg, err := config.Load()
+	if err != nil {
+		return err
+	}
+	st, err := store.Open(cfg.DBPath)
+	if err != nil {
+		return err
+	}
+	defer st.Close()
+	return st.Backup(context.Background(), os.Stdout)
 }
