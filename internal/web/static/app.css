@@ -434,13 +434,14 @@ body::after {
 @media (prefers-color-scheme: dark) { :root { --snow: rgba(255, 255, 255, .14); } }
 
 /* Text that sits right on the photo is light with a soft shadow. */
-.campaign-head, .hero, .toolbar, main > p, footer.site {
+/* Notices have their own background, so they are left out. */
+.campaign-head, .hero, .toolbar, main > p:not(.flash), footer.site {
   color: #f8f1e4;
   text-shadow: 0 1px 3px rgba(0, 0, 0, .65);
 }
 .campaign-head .facts dt, .toolbar .muted, .hero p { color: #e9dcc6; }
 .hero h1, .campaign-head h1 { color: #fff8ec; }
-main > p > a, .toolbar .btn-link { color: #ffd98a; }
+main > p:not(.flash) > a, .toolbar .btn-link { color: #ffd98a; }
 .campaign-head .pill, .toolbar .btn { text-shadow: none; }
 footer.site::before, footer.site::after { color: #e9dcc6; }
 
