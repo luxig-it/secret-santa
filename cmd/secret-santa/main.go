@@ -90,7 +90,7 @@ func mailer(cfg config.Config) mail.Sender {
 		return nil
 	}
 	s := cfg.SMTP
-	return mail.NewSMTP(s.Host, s.Port, s.User, s.Pass, s.From, cfg.SMTPInsecure)
+	return mail.NewSMTP(s.Host, s.Port, s.User, s.Pass, s.From, s.ImplicitTLS, cfg.SMTPInsecure)
 }
 
 // backup writes a consistent copy of the database to stdout, for

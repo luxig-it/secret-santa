@@ -8,6 +8,7 @@ import (
 	"net/mail"
 	"net/netip"
 	"os"
+	"strconv"
 	"strings"
 
 	"github.com/luxig-it/secret-santa/internal/token"
@@ -27,6 +28,9 @@ type SMTP struct {
 	User string
 	Pass string
 	From string
+	// ImplicitTLS opens connections with TLS right away (SMTPS), as port
+	// 465 expects; otherwise STARTTLS upgrades a plain connection.
+	ImplicitTLS bool
 }
 
 // Enabled reports whether enough is configured to actually send mail.
@@ -36,11 +40,11 @@ func (s SMTP) check() error {
 	if !s.Enabled() {
 		return fmt.Errorf("SECRET_SANTA_ALLOW_EMAIL needs SECRET_SANTA_SMTP_HOST and SECRET_SANTA_SMTP_FROM")
 	}
+	if p, err := strconv.Atoi(s.Port); err != nil || p < 1 || p > 65535 {
+		return fmt.Errorf("SECRET_SANTA_SMTP_PORT %q is not a port number", s.Port)
+	}
 	if _, err := mail.ParseAddress(s.From); err != nil {
 		return fmt.Errorf("SECRET_SANTA_SMTP_FROM %q is not an address like \"Wichteln <wichteln@example.com>\": %w", s.From, err)
-	}
-	if s.Port == "465" {
-		return fmt.Errorf("SECRET_SANTA_SMTP_PORT 465 (implicit TLS) is not supported; use the STARTTLS port, usually 587")
 	}
 	if (s.User == "") != (s.Pass == "") {
 		return fmt.Errorf("set both SECRET_SANTA_SMTP_USER and SECRET_SANTA_SMTP_PASS, or neither")
@@ -58,7 +62,9 @@ type Config struct {
 	DBPath     string
 	Organizers []Organizer
 	SMTP       SMTP
-	// SMTPInsecure allows sending without STARTTLS, for a local relay.
+	// SMTPInsecure allows sending unencrypted when a server without
+	// STARTTLS is used, for a local relay. It never relaxes certificate
+	// checks and has no effect with implicit TLS.
 	SMTPInsecure bool
 	// TrustedProxies are the addresses of reverse proxies whose X-Real-IP
 	// header names the actual client. Requests from anywhere else are taken
@@ -97,6 +103,18 @@ func Load() (Config, error) {
 		return Config{}, fmt.Errorf("SECRET_SANTA_SMTP_INSECURE: %w", err)
 	}
 	c.SMTPInsecure = insecure
+	c.SMTP.Port = strings.TrimSpace(c.SMTP.Port)
+	switch mode := strings.ToLower(strings.TrimSpace(env("SECRET_SANTA_SMTP_TLS", ""))); mode {
+	case "":
+		// Port 465 is SMTPS by convention; everything else uses STARTTLS.
+		c.SMTP.ImplicitTLS = c.SMTP.Port == "465"
+	case "implicit":
+		c.SMTP.ImplicitTLS = true
+	case "starttls":
+		c.SMTP.ImplicitTLS = false
+	default:
+		return Config{}, fmt.Errorf("SECRET_SANTA_SMTP_TLS must be \"implicit\" or \"starttls\", not %q", mode)
+	}
 
 	orgs, err := ParseOrganizers(env("SECRET_SANTA_ORGANIZER_TOKENS", ""))
 	if err != nil {
