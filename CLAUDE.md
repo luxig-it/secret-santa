@@ -18,7 +18,8 @@ rules; they are the spec.
   `internal/web`, never in templates:
   - Wishes of others: nobody before the draw; afterwards only the giver.
   - Surprise ideas: only the author before the draw; afterwards only whoever
-    drew the recipient (`SurprisesForGiver`). The recipient never.
+    drew the recipient (`SurprisesForGiver`), and only if the recipient still
+    accepts surprises. The recipient never.
   - The organizer page shows no wishes, ideas or assignments.
 - Readiness is `Participant.ReadyWith(surpriseCount)`: no `needs_time`, and
   either a wish or `surprise_suffices` with at least one surprise idea. The

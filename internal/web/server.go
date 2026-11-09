@@ -403,7 +403,16 @@ func (s *Server) members(ctx context.Context, c store.Campaign, viewer int64) ([
 	}
 	out := make([]views.Member, len(ps))
 	for i, p := range ps {
-		out[i] = views.Member{Participant: p, Surprises: counts[p.ID], IsMe: p.ID == viewer, ByMe: byMe[p.ID]}
+		m := views.Member{Participant: p, IsMe: p.ID == viewer, ByMe: byMe[p.ID]}
+		// Ideas for somebody who switched surprises off will never be shown,
+		// so they do not count for anybody. Only the recipient is told how
+		// many are stored, so they know what switching back on brings back.
+		if p.SurprisesOpen {
+			m.Surprises = counts[p.ID]
+		} else if m.IsMe {
+			m.Hidden = counts[p.ID]
+		}
+		out[i] = m
 	}
 	return out, nil
 }
@@ -618,6 +627,7 @@ func (s *Server) renderParticipant(w http.ResponseWriter, r *http.Request, me st
 			return
 		}
 		page.Receiver = &receiver
+		page.ReceiverDeclined = !receiver.SurprisesOpen
 		if page.Surprises, err = s.store.SurprisesForGiver(ctx, c.ID, me.ID); err != nil {
 			s.fail(w, r, err)
 			return

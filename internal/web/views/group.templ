@@ -32,12 +32,12 @@ templ Group(p CampaignPage, actions func(Member) templ.Component) {
 							} else {
 								<li class="badge badge-no">✗ Noch kein Wunsch</li>
 							}
-							if m.Surprises > 0 {
-								<li class="badge badge-gift">🎁 { plural(m.Surprises, "Überraschung", "Überraschungen") } hinterlegt</li>
-							} else if m.SurprisesOpen {
-								<li class="badge badge-neutral">Offen für Überraschungen</li>
-							} else {
+							if !m.SurprisesOpen {
 								<li class="badge badge-neutral">Keine Überraschungen gewünscht</li>
+							} else if m.Surprises > 0 {
+								<li class="badge badge-gift">🎁 { plural(m.Surprises, "Überraschung", "Überraschungen") } hinterlegt</li>
+							} else {
+								<li class="badge badge-neutral">Offen für Überraschungen</li>
 							}
 							if m.Ready() {
 								<li class="badge badge-ready">● Bereit zur Auslosung</li>

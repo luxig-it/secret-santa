@@ -30,7 +30,9 @@ templ resultCard(p ParticipantPage) {
 			<p class="notice notice-gift">{ p.Receiver.Name } hat keinen eigenen Wunsch hinterlegt und freut sich über jede Überraschung – schau dir die Ideen der Gruppe an.</p>
 		}
 		<h3>Überraschungsideen aus der Gruppe</h3>
-		if len(p.Surprises) == 0 {
+		if p.ReceiverDeclined {
+			<p class="muted">{ p.Receiver.Name } wollte keine Überraschungen – hier zählt nur der Wunsch.</p>
+		} else if len(p.Surprises) == 0 {
 			<p class="muted">Für { p.Receiver.Name } wurden keine Überraschungsideen hinterlegt.</p>
 		} else {
 			<ul class="surprises">
@@ -91,6 +93,12 @@ templ mySurprisesCard(p ParticipantPage) {
 		}
 		if n := p.MySurpriseCount(); n > 0 {
 			<p class="notice notice-gift">🎁 Für dich { pluralWas(n) } { plural(n, "Überraschung", "Überraschungen") } hinterlegt.</p>
+		} else if h := p.MyHiddenCount(); h > 0 {
+			if p.Campaign.Drawn() {
+				<p class="notice">Für dich { pluralWas(h) } { plural(h, "Überraschung", "Überraschungen") } hinterlegt. Weil du Überraschungen ausgeschaltet hattest, hat dein Wichtel nur deinen Wunsch gesehen.</p>
+			} else {
+				<p class="notice">Für dich { pluralWas(h) } { plural(h, "Überraschung", "Überraschungen") } hinterlegt. Solange du Überraschungen ausgeschaltet hast, bleiben sie gespeichert, werden deinem Wichtel aber nicht gezeigt – dann zählt nur dein Wunsch.</p>
+			}
 		}
 		if p.Campaign.Drawn() {
 			if p.Me.SurpriseSuffices && !p.Me.HasWish() {
@@ -118,8 +126,8 @@ templ mySurprisesCard(p ParticipantPage) {
 				}
 				<button class="btn btn-secondary btn-small js-hide" type="submit">Speichern</button>
 			</form>
-			if !p.Me.SurprisesOpen && p.MySurpriseCount() > 0 {
-				<p class="hint">Bereits hinterlegte Ideen bleiben erhalten, es kommen nur keine neuen hinzu.</p>
+			if p.MyHiddenCount() > 0 {
+				<p class="hint">Schaltest du Überraschungen vor der Auslosung wieder ein, sind die gespeicherten Ideen wieder dabei.</p>
 			} else if p.Me.SurprisesOpen && p.Me.SurpriseSuffices {
 				<p class="hint">Schaltest du Überraschungen aus, genügt dir auch keine mehr als Wunsch.</p>
 			}
@@ -155,6 +163,9 @@ templ SurpriseEdit(p SurprisePage) {
 			<h1>Überraschung für { p.Recipient.Name }</h1>
 			@FlashBox(p.Flash)
 			<p>Hinterlege eine Idee für { p.Recipient.Name }. Nur du kannst sie lesen. Wer { p.Recipient.Name } zugelost bekommt, sieht sie nach der Auslosung – egal, ob du das selbst bist oder jemand anderes. { p.Recipient.Name } selbst sieht nur, dass eine Überraschung hinterlegt wurde.</p>
+			if !p.Recipient.SurprisesOpen {
+				<p class="notice">{ p.Recipient.Name } möchte gerade keine Überraschungen. Deine Idee bleibt gespeichert, wird aber nur angezeigt, wenn { p.Recipient.Name } Überraschungen vor der Auslosung wieder einschaltet.</p>
+			}
 			<form method="post" action={ templ.URL(idPath(participantPath(p.Me.Token, "/s"), p.Recipient.ID, "")) } class="stack">
 				@MarkdownEditor("body", "body", "Deine Idee", p.Body, participantPath(p.Me.Token, "/preview"), "z. B. Sie liebt Kräutertee – vielleicht eine schöne Teedose?")
 				<div class="row">

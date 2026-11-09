@@ -390,3 +390,40 @@ func TestClosingSurprisesClearsSuffices(t *testing.T) {
 		t.Fatalf("open=%v suffices=%v, want both off", got.SurprisesOpen, got.SurpriseSuffices)
 	}
 }
+
+func TestClosedSurprisesAreHiddenFromTheGiver(t *testing.T) {
+	ctx := context.Background()
+	for _, reopen := range []bool{false, true} {
+		s := open(t)
+		c := mustCampaign(t, s)
+		anna := mustJoin(t, s, c, "Anna", "x")
+		ben := mustJoin(t, s, c, "Ben", "the one thing I really want")
+		if err := s.SaveSurprise(ctx, c.ID, anna.ID, ben.ID, "idea"); err != nil {
+			t.Fatal(err)
+		}
+		if err := s.SetSurprisePrefs(ctx, c.ID, ben.ID, false, false); err != nil {
+			t.Fatal(err)
+		}
+		if reopen {
+			if err := s.SetSurprisePrefs(ctx, c.ID, ben.ID, true, false); err != nil {
+				t.Fatal(err)
+			}
+		}
+		if err := s.Draw(ctx, c.ID); err != nil {
+			t.Fatal(err)
+		}
+
+		// The idea is still stored either way.
+		if _, err := s.SurpriseBy(ctx, anna.ID, ben.ID); err != nil {
+			t.Fatalf("reopen=%v: idea gone from the database: %v", reopen, err)
+		}
+		// With two people Anna gives to Ben.
+		got, err := s.SurprisesForGiver(ctx, c.ID, anna.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if want := map[bool]int{false: 0, true: 1}[reopen]; len(got) != want {
+			t.Fatalf("reopen=%v: giver sees %d ideas, want %d", reopen, len(got), want)
+		}
+	}
+}

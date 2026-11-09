@@ -465,3 +465,34 @@ func TestClosingSurprisesDropsSuffices(t *testing.T) {
 		t.Error("surprise still suffices after closing surprises")
 	}
 }
+
+func TestClosedSurprisesHiddenAfterDraw(t *testing.T) {
+	h := newHarness(t)
+	c := h.client()
+	org, join := h.setup()
+	anna := h.join(join, "Anna")
+	ben := h.join(join, "Ben")
+	pBen, _ := h.st.ParticipantByToken(t.Context(), ben)
+	h.post(c, "/p/"+anna+"/wish", url.Values{"wishlist": {"x"}})
+	h.post(c, "/p/"+ben+"/wish", url.Values{"wishlist": {"BEN-REAL-WISH"}})
+	h.post(c, "/p/"+anna+"/s/"+itoa(pBen.ID), url.Values{"body": {"HIDDEN-IDEA"}})
+	h.post(c, "/p/"+ben+"/surprises", url.Values{"open": {"0"}})
+
+	if _, page := h.get(c, "/p/"+anna); strings.Contains(page, "1 Überraschung hinterlegt") || !strings.Contains(page, "Keine Überraschungen gewünscht") {
+		t.Error("group still counts ideas for Ben after he closed surprises")
+	}
+	if _, page := h.get(c, "/p/"+anna+"/s/"+itoa(pBen.ID)); !strings.Contains(page, "möchte gerade keine Überraschungen") {
+		t.Error("Anna's editor does not tell her that her idea will not be shown")
+	}
+	if _, page := h.get(c, "/p/"+ben); !strings.Contains(page, "Solange du Überraschungen ausgeschaltet hast") {
+		t.Error("Ben is not told his stored idea is hidden")
+	}
+	h.post(c, "/o/"+org+"/draw", nil)
+	if _, page := h.get(c, "/p/"+ben); !strings.Contains(page, "hat dein Wichtel nur deinen Wunsch gesehen") {
+		t.Error("Ben's page after the draw does not use the final wording")
+	}
+	_, page := h.get(c, "/p/"+anna)
+	if !strings.Contains(page, "BEN-REAL-WISH") || strings.Contains(page, "HIDDEN-IDEA") || !strings.Contains(page, "wollte keine Überraschungen") {
+		t.Error("Anna's result must show Ben's wish and not the idea he closed")
+	}
+}

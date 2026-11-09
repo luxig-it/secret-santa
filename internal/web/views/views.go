@@ -28,7 +28,12 @@ type Flash struct {
 // everybody, the contents behind them are not.
 type Member struct {
 	store.Participant
+	// Surprises counts the ideas that will be shown to the giver; for
+	// somebody who switched surprises off that is none.
 	Surprises int
+	// Hidden counts stored ideas the giver will not see because surprises
+	// are switched off. It is only filled in on the viewer's own row.
+	Hidden int
 	// IsMe marks the viewer's own row on a participant page.
 	IsMe bool
 	// ByMe reports that the viewer left an idea for this person.
@@ -93,6 +98,9 @@ type ParticipantPage struct {
 	// Set after the draw only.
 	Receiver  *store.Participant
 	Surprises []store.Surprise
+	// ReceiverDeclined: the receiver switched surprises off, so whatever
+	// was left for them is not shown.
+	ReceiverDeclined bool
 }
 
 // MeMember is the viewer's own row, with the counts the readiness rules need.
@@ -105,8 +113,13 @@ func (p ParticipantPage) MeMember() Member {
 	return Member{Participant: p.Me}
 }
 
-// MySurpriseCount is how many ideas others left for the viewer.
+// MySurpriseCount is how many ideas others left for the viewer that will
+// be shown to their giver.
 func (p ParticipantPage) MySurpriseCount() int { return p.MeMember().Surprises }
+
+// MyHiddenCount is how many ideas for the viewer stay stored but hidden
+// because they switched surprises off.
+func (p ParticipantPage) MyHiddenCount() int { return p.MeMember().Hidden }
 
 // SurprisePage edits the idea the viewer leaves for somebody.
 type SurprisePage struct {

@@ -18,6 +18,9 @@ The interface is German.
    - Only the author can read an idea before the draw.
    - The recipient and everybody else only see *that* ideas exist.
    - The recipient never sees the ideas left for them.
+   - Switching surprises off keeps existing ideas stored but hides them from
+     the giver, for somebody who decides they really want their wish.
+     Switching back on before the draw brings them back.
 5. **Group overview** – everybody in the group sees all members and their
    status: wish entered, number of surprise ideas, ready for the draw.
 6. **Draw** – a participant is ready once they entered a wish, unless they

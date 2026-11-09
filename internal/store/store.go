@@ -430,9 +430,11 @@ func (s *Store) SetWish(ctx context.Context, campaignID, participantID int64, te
 
 // SetSurprisePrefs records whether others may leave surprise ideas for this
 // participant and whether one such idea is enough to make them ready without
-// a wish. Ideas already left stay in place either way; "open" only governs
-// new ones. A surprise cannot suffice for somebody who accepts none, so
-// closing also clears "suffices". Neither can change after the draw.
+// a wish. Ideas already left stay stored either way; while surprises are
+// closed nobody can add new ones and the giver is not shown the existing
+// ones (see SurprisesForGiver). A surprise cannot suffice for somebody who
+// accepts none, so closing also clears "suffices". Neither can change after
+// the draw.
 func (s *Store) SetSurprisePrefs(ctx context.Context, campaignID, participantID int64, open, suffices bool) error {
 	return s.updateWhileOpen(ctx, campaignID,
 		`UPDATE participant SET surprises_open = ?, surprise_suffices = ?
@@ -707,11 +709,17 @@ func (s *Store) SurpriseBy(ctx context.Context, authorID, recipientID int64) (Su
 // SurprisesForGiver returns the ideas left for whoever the giver drew. It is
 // the only way to read other people's ideas, and it yields nothing before the
 // draw, so a recipient can never see what was left for them.
+//
+// It also yields nothing when the recipient switched surprises off: they may
+// have closed them because they really want what they wished for. The ideas
+// stay stored, so switching back on before the draw brings them back.
 func (s *Store) SurprisesForGiver(ctx context.Context, campaignID, giverID int64) ([]Surprise, error) {
 	rows, err := s.db.QueryContext(ctx, surpriseQuery+`
 		JOIN assignment g ON g.receiver_id = s.recipient_id
 		JOIN campaign c ON c.id = g.campaign_id
+		JOIN participant r ON r.id = s.recipient_id
 		WHERE g.campaign_id = ? AND g.giver_id = ? AND c.state = ?
+		  AND r.surprises_open = 1
 		ORDER BY s.id`, campaignID, giverID, StateDrawn)
 	if err != nil {
 		return nil, err
