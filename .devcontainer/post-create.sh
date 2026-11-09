@@ -8,6 +8,10 @@ own() {
     [ -d "$1" ] && [ ! -w "$1" ] && sudo chown -R "$(id -u):$(id -g)" "$1" || true
 }
 own /go/pkg/mod
+# The checksum database cache lives next to the module cache; without it
+# "go get" cannot verify new modules.
+sudo mkdir -p /go/pkg/sumdb
+own /go/pkg/sumdb
 own "$HOME"
 
 # Claude Code via the native installer: no Node required, and because it lands
