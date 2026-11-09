@@ -126,7 +126,7 @@ templ mySurprisesCard(p ParticipantPage) {
 			if p.Campaign.Drawn() {
 				<p class="notice">Für dich { pluralWas(h) } { plural(h, "Überraschung", "Überraschungen") } hinterlegt. Weil du Überraschungen ausgeschaltet hattest, hat dein Wichtel nur deinen Wunsch gesehen.</p>
 			} else {
-				<p class="notice">Für dich { pluralWas(h) } { plural(h, "Überraschung", "Überraschungen") } hinterlegt. Solange du Überraschungen ausgeschaltet hast, bleiben sie gespeichert, werden deinem Wichtel aber nicht gezeigt – dann zählt nur dein Wunsch.</p>
+				<p class="notice">Für dich { pluralWas(h) } { plural(h, "Überraschung", "Überraschungen") } hinterlegt. Da du keine Überraschungen mehr möchtest, wird deinem Wichtel nach der Auslosung nur dein eingetragener Wunsch angezeigt.</p>
 			}
 		}
 		if p.Campaign.Drawn() {
@@ -147,7 +147,8 @@ templ mySurprisesCard(p ParticipantPage) {
 			</form>
 			if p.Me.SurprisesOpen {
 				<p class="hint" id="surprises-explained">Dein Wichtel sieht nach der Auslosung deinen Wunsch <em>und</em> alle Überraschungsideen der anderen für dich. Soll nur dein Wunsch zählen, schalte Überraschungen aus.</p>
-			} else {
+			} else if p.MyHiddenCount() == 0 {
+				// With hidden ideas the notice above already says this.
 				<p class="hint" id="surprises-explained">Dein Wichtel sieht nach der Auslosung nur deinen Wunsch.</p>
 			}
 			if p.MyHiddenCount() > 0 {
