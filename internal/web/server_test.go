@@ -705,3 +705,26 @@ func TestTooLongDraftIsKeptWhenSwitching(t *testing.T) {
 		t.Fatalf("a rejected post changed the row: %+v", p)
 	}
 }
+
+func TestStaticFilesRevalidateCheaply(t *testing.T) {
+	h := newHarness(t)
+	res, err := http.Get(h.srv.URL + "/static/bg-gifts-1200.jpg")
+	if err != nil {
+		t.Fatal(err)
+	}
+	res.Body.Close()
+	tag := res.Header.Get("ETag")
+	if res.StatusCode != 200 || tag == "" {
+		t.Fatalf("status %d, ETag %q", res.StatusCode, tag)
+	}
+	req, _ := http.NewRequest("GET", h.srv.URL+"/static/bg-gifts-1200.jpg", nil)
+	req.Header.Set("If-None-Match", tag)
+	res, err = http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	res.Body.Close()
+	if res.StatusCode != http.StatusNotModified {
+		t.Fatalf("revalidation: %d, want 304", res.StatusCode)
+	}
+}
