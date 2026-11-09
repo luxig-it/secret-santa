@@ -145,6 +145,11 @@ templ mySurprisesCard(p ParticipantPage) {
 				</label>
 				<button class="btn btn-secondary btn-small js-hide" type="submit">Speichern</button>
 			</form>
+			if p.Me.SurprisesOpen {
+				<p class="hint" id="surprises-explained">Dein Wichtel sieht nach der Auslosung deinen Wunsch <em>und</em> alle Überraschungsideen der anderen für dich. Soll nur dein Wunsch zählen, schalte Überraschungen aus.</p>
+			} else {
+				<p class="hint" id="surprises-explained">Dein Wichtel sieht nach der Auslosung nur deinen Wunsch.</p>
+			}
 			if p.MyHiddenCount() > 0 {
 				<p class="hint">Schaltest du Überraschungen vor der Auslosung wieder ein, sind die gespeicherten Ideen wieder dabei.</p>
 			} else if p.Me.SurprisesOpen && p.Me.SurpriseSuffices {

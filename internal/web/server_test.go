@@ -568,3 +568,17 @@ func TestTurningOffNothingComesToMindKeepsTheWish(t *testing.T) {
 		t.Fatalf("wish = %q, want it kept", p.Wishlist)
 	}
 }
+
+func TestSurpriseCardExplainsWhatTheGiverSees(t *testing.T) {
+	h := newHarness(t)
+	c := h.client()
+	_, join := h.setup()
+	ben := h.join(join, "Ben")
+	if _, page := h.get(c, "/p/"+ben); !strings.Contains(page, "deinen Wunsch <em>und</em> alle Überraschungsideen") {
+		t.Error("open surprises: the card does not say the giver sees wish and ideas")
+	}
+	h.post(c, "/p/"+ben+"/surprises", url.Values{"open": {"0"}})
+	if _, page := h.get(c, "/p/"+ben); !strings.Contains(page, "sieht nach der Auslosung nur deinen Wunsch") {
+		t.Error("closed surprises: the card does not say only the wish counts")
+	}
+}
