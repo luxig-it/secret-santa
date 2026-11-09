@@ -26,6 +26,9 @@ templ Manage(p ManagePage) {
 		<section class="card">
 			<h2>Verwaltung</h2>
 			<p>Über diesen Link kommst du jederzeit zurück auf diese Seite – auch ohne Anmeldung. Gib ihn nur an Leute weiter, die mitorganisieren sollen.</p>
+			if p.EmailAction != "" {
+				<p class="hint">Tipp: Über „✉ E-Mail“ kannst du ihn dir auch zuschicken lassen.</p>
+			}
 			@CopyField("admin-url", "Verwaltungslink", p.AdminURL, p.EmailAction)
 			<p class="hint">Wünsche, Überraschungsideen und die Zuordnung siehst du hier bewusst nicht.</p>
 			<p class="hint">Hat jemand den persönlichen Link verloren, kopiere ihn in der Gruppe über „Link kopieren“ und schick ihn nur dieser Person. Wer einen persönlichen Link öffnet, sieht die Seite dieser Person – nach der Auslosung also auch, wen sie beschenkt.</p>
