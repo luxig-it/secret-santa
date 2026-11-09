@@ -28,11 +28,23 @@ func TestParseOrganizersBareToken(t *testing.T) {
 	}
 }
 
+func TestParseOrganizersNumbersBareTokens(t *testing.T) {
+	orgs, err := ParseOrganizers("first-long-token,second-long-token")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if orgs[0].Label == orgs[1].Label {
+		t.Fatalf("bare tokens share the label %q", orgs[0].Label)
+	}
+}
+
 func TestParseOrganizersRejects(t *testing.T) {
 	for name, raw := range map[string]string{
 		"short token":     "carsten:abc",
 		"empty token":     "carsten:",
 		"duplicate token": "a:same-token-here,b:same-token-here",
+		"duplicate label": "carsten:first-token-x,carsten:second-token",
+		"empty label":     ":some-long-token",
 	} {
 		if _, err := ParseOrganizers(raw); err == nil {
 			t.Errorf("%s: expected an error for %q", name, raw)

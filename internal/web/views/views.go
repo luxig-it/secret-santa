@@ -77,9 +77,8 @@ type JoinPage struct {
 // ParticipantPage is somebody's private page.
 type ParticipantPage struct {
 	CampaignPage
-	Me      store.Participant
-	MyURL   string
-	BaseURL string
+	Me    store.Participant
+	MyURL string
 	// Set after the draw only.
 	Receiver  *store.Participant
 	Surprises []store.Surprise

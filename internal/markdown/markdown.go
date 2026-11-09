@@ -61,6 +61,18 @@ func (safeLinks) Transform(doc *ast.Document, reader text.Reader, _ parser.Conte
 
 	// Replace after walking so the tree is not modified mid-walk.
 	for _, img := range images {
+		parent := img.Parent()
+		if insideLink(img) {
+			// A link inside a link is invalid HTML and browsers would split
+			// it, so an image that already is a link's label becomes text.
+			for c := img.FirstChild(); c != nil; {
+				next := c.NextSibling()
+				parent.InsertBefore(parent, img, c)
+				c = next
+			}
+			parent.RemoveChild(parent, img)
+			continue
+		}
 		link := ast.NewLink()
 		link.Destination = img.Destination
 		link.Title = img.Title
@@ -73,8 +85,17 @@ func (safeLinks) Transform(doc *ast.Document, reader text.Reader, _ parser.Conte
 			link.AppendChild(link, ast.NewString(img.Destination))
 		}
 		markExternal(link)
-		img.Parent().ReplaceChild(img.Parent(), img, link)
+		parent.ReplaceChild(parent, img, link)
 	}
+}
+
+func insideLink(n ast.Node) bool {
+	for p := n.Parent(); p != nil; p = p.Parent() {
+		if _, ok := p.(*ast.Link); ok {
+			return true
+		}
+	}
+	return false
 }
 
 func markExternal(n ast.Node) {

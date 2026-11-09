@@ -334,6 +334,14 @@ type querier interface {
 	QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row
 }
 
+// ParticipantInCampaign looks somebody up by id, but only within the given
+// campaign, so an id from a different campaign reads as not found.
+func (s *Store) ParticipantInCampaign(ctx context.Context, campaignID, participantID int64) (Participant, error) {
+	return scanParticipant(s.db.QueryRowContext(ctx,
+		`SELECT `+participantColumns+` FROM participant WHERE id = ? AND campaign_id = ?`,
+		participantID, campaignID))
+}
+
 // Participants lists a campaign in join order.
 func (s *Store) Participants(ctx context.Context, campaignID int64) ([]Participant, error) {
 	return participants(ctx, s.db, campaignID)
