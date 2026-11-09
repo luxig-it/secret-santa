@@ -3,6 +3,8 @@ CREATE TABLE IF NOT EXISTS campaign (
     title           TEXT    NOT NULL,
     budget          TEXT    NOT NULL DEFAULT '',
     draw_date       TEXT    NOT NULL DEFAULT '',
+    -- Optional welcome from the organizer, Markdown, shown to the group.
+    greeting        TEXT    NOT NULL DEFAULT '',
     join_token      TEXT    NOT NULL UNIQUE,
     organizer_token TEXT    NOT NULL UNIQUE,
     organizer_label TEXT    NOT NULL DEFAULT '',

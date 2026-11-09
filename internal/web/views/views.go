@@ -178,7 +178,7 @@ type OrganizerPage struct {
 
 // CampaignForm keeps the input of a rejected create request.
 type CampaignForm struct {
-	Title, Budget, DrawDate string
+	Title, Budget, DrawDate, Greeting string
 }
 
 var months = [...]string{"Januar", "Februar", "März", "April", "Mai", "Juni",

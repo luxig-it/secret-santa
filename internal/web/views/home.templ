@@ -42,6 +42,9 @@ templ Organizer(p OrganizerPage) {
 					<input id="draw_date" name="draw_date" type="date" value={ p.Form.DrawDate }/>
 				</div>
 				<div class="field wide">
+					@MarkdownEditor("greeting", "greeting", "Begrüßungstext (optional)", p.Form.Greeting, "/organizer/preview", "z. B. Die Geschenke tauschen wir bei der Weihnachtsfeier am 19.12. aus.")
+				</div>
+				<div class="field wide">
 					<button class="btn" type="submit">Kampagne anlegen</button>
 				</div>
 			</form>

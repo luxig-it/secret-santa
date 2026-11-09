@@ -59,30 +59,60 @@ func flashRole(f Flash) string {
 	return "status"
 }
 
+// CampaignHead is the campaign heading with its basic facts, for pages
+// where the facts sit on the page itself.
 templ CampaignHead(c store.Campaign) {
 	<section class="campaign-head">
-		// The title is shown in the header band; the heading stays for
-		// screen readers and the document outline.
-		<h1 class="sr-only">{ c.Title }</h1>
-		<dl class="facts">
-			if c.Budget != "" {
-				<div><dt>Budget</dt><dd>{ c.Budget }</dd></div>
-			}
-			if c.DrawDate != "" {
-				<div><dt>Auslosung</dt><dd>{ GermanDate(c.DrawDate) }</dd></div>
-			}
-			<div>
-				<dt>Status</dt>
-				<dd>
-					if c.Drawn() {
-						<span class="pill pill-done">Ausgelost</span>
-					} else {
-						<span class="pill pill-open">Offen</span>
-					}
-				</dd>
-			</div>
-		</dl>
+		@CampaignTitle(c)
+		@CampaignFacts(c)
 	</section>
+}
+
+// CampaignTitle is the page heading. The title is shown in the header band;
+// the heading stays for screen readers and the document outline.
+templ CampaignTitle(c store.Campaign) {
+	<h1 class="sr-only">{ c.Title }</h1>
+}
+
+// CampaignFacts lists budget, planned draw date and state.
+templ CampaignFacts(c store.Campaign) {
+	<dl class="facts">
+		if c.Budget != "" {
+			<div><dt>Budget</dt><dd>{ c.Budget }</dd></div>
+		}
+		if c.DrawDate != "" {
+			<div><dt>Auslosung</dt><dd>{ GermanDate(c.DrawDate) }</dd></div>
+		}
+		<div>
+			<dt>Status</dt>
+			<dd>
+				if c.Drawn() {
+					<span class="pill pill-done">Ausgelost</span>
+				} else {
+					<span class="pill pill-open">Offen</span>
+				}
+			</dd>
+		</div>
+	</dl>
+}
+
+// Greeting is the organizer's welcome text inside another card, set off as
+// a quote. It renders nothing without a greeting.
+templ Greeting(c store.Campaign) {
+	if c.Greeting != "" {
+		<div class="greeting prose">
+			@templ.Raw(renderMarkdown(c.Greeting))
+		</div>
+	}
+}
+
+// GreetingCard is the welcome text as a card of its own, for the join page.
+templ GreetingCard(c store.Campaign) {
+	if c.Greeting != "" {
+		<section class="card prose">
+			@templ.Raw(renderMarkdown(c.Greeting))
+		</section>
+	}
 }
 
 templ CopyField(id, label, value string) {

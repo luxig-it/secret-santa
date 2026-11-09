@@ -24,7 +24,7 @@ func openAt(t *testing.T, path string) *Store {
 
 func mustCampaign(t *testing.T, s *Store) Campaign {
 	t.Helper()
-	c, err := s.CreateCampaign(context.Background(), "Office", "20 EUR", "2026-12-01", "carsten")
+	c, err := s.CreateCampaign(context.Background(), "Office", "20 EUR", "2026-12-01", "", "carsten")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -273,7 +273,7 @@ func TestCampaignsByOrganizer(t *testing.T) {
 	s := open(t)
 	first := mustCampaign(t, s)
 	second := mustCampaign(t, s)
-	if _, err := s.CreateCampaign(ctx, "Other", "", "", "anna"); err != nil {
+	if _, err := s.CreateCampaign(ctx, "Other", "", "", "", "anna"); err != nil {
 		t.Fatal(err)
 	}
 	got, err := s.CampaignsByOrganizer(ctx, "carsten")
@@ -313,14 +313,18 @@ func TestNeedsTimeBlocksDraw(t *testing.T) {
 func TestMigrationAddsColumns(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "old.db")
 	s := openAt(t, path)
-	// Simulate a database from before needs_time existed.
+	// Simulate a database from before any of the added columns existed,
+	// with rows written the way the old code wrote them.
 	for _, c := range addedColumns {
 		if _, err := s.db.Exec(`ALTER TABLE ` + c.table + ` DROP COLUMN ` + c.column); err != nil {
 			t.Fatal(err)
 		}
 	}
-	c := mustCampaign(t, s)
-	if _, err := s.db.Exec(`INSERT INTO participant (campaign_id, name, token, created_at) VALUES (?, 'Old', 'old-token', '2026-01-01T00:00:00Z')`, c.ID); err != nil {
+	if _, err := s.db.Exec(`INSERT INTO campaign (id, title, join_token, organizer_token, created_at)
+		VALUES (1, 'Old', 'old-join', 'old-org', '2026-01-01T00:00:00Z')`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.db.Exec(`INSERT INTO participant (campaign_id, name, token, created_at) VALUES (1, 'Old', 'old-token', '2026-01-01T00:00:00Z')`); err != nil {
 		t.Fatal(err)
 	}
 	s.Close() // the Cleanup's second Close is harmless
@@ -332,6 +336,10 @@ func TestMigrationAddsColumns(t *testing.T) {
 	}
 	if p.NeedsTime || p.SurpriseSuffices {
 		t.Fatal("migrated participant has a switch on by default")
+	}
+	c, err := s.CampaignByJoinToken(context.Background(), "old-join")
+	if err != nil || c.Greeting != "" {
+		t.Fatalf("migrated campaign: %+v, %v", c, err)
 	}
 }
 
@@ -461,5 +469,32 @@ func TestHopingForASurpriseSetsTheWishAside(t *testing.T) {
 	got, _ = s.ParticipantByToken(ctx, ben.Token)
 	if !got.HasWish() || got.SurpriseSuffices || !got.SurprisesOpen || !got.ReadyWith(0) {
 		t.Fatalf("after switching back: %+v", got)
+	}
+}
+
+func TestGreeting(t *testing.T) {
+	ctx := context.Background()
+	s := open(t)
+	c, err := s.CreateCampaign(ctx, "Office", "", "", "Hallo **ihr**!", "carsten")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := s.CampaignByID(ctx, c.ID); got.Greeting != "Hallo **ihr**!" {
+		t.Fatalf("greeting = %q", got.Greeting)
+	}
+	mustJoin(t, s, c, "Anna", "x")
+	mustJoin(t, s, c, "Ben", "y")
+	if err := s.Draw(ctx, c.ID); err != nil {
+		t.Fatal(err)
+	}
+	// Still editable after the draw.
+	if err := s.SetGreeting(ctx, c.ID, "Frohe Weihnachten"); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := s.CampaignByID(ctx, c.ID); got.Greeting != "Frohe Weihnachten" {
+		t.Fatalf("greeting after edit = %q", got.Greeting)
+	}
+	if err := s.SetGreeting(ctx, 9999, "x"); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("unknown campaign: %v", err)
 	}
 }
