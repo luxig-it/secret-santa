@@ -34,9 +34,9 @@ var ErrNotFound = errors.New("not found")
 // ErrAlreadyDrawn guards the operations that only make sense before the draw.
 var ErrAlreadyDrawn = errors.New("this campaign has already been drawn")
 
-// ErrNotReady means at least one participant has not entered a wish yet, so
-// the organizer cannot draw.
-var ErrNotReady = errors.New("not every participant has entered a wish")
+// ErrNotReady means at least one participant has not entered a wish yet or
+// still wants time to think it over, so the organizer cannot draw.
+var ErrNotReady = errors.New("not every participant is ready: a wish is missing or still being thought over")
 
 // ErrNameTaken means somebody with the same name already joined, which would
 // make the group list ambiguous.
@@ -79,13 +79,20 @@ type Participant struct {
 	Email         string
 	Wishlist      string
 	SurprisesOpen bool
+	NeedsTime     bool
 	Token         string
 	CreatedAt     time.Time
 }
 
-// HasWish reports whether a wish has been entered. That is the only
-// precondition for the draw, so it doubles as "ready".
+// HasWish reports whether a wish has been entered.
 func (p Participant) HasWish() bool { return strings.TrimSpace(p.Wishlist) != "" }
+
+// Ready reports whether somebody may be drawn: they entered a wish and do
+// not want more time to think it over.
+func (p Participant) Ready() bool { return p.HasWish() && !p.NeedsTime }
+
+// Thinking reports a wish that is entered but not final yet.
+func (p Participant) Thinking() bool { return p.HasWish() && p.NeedsTime }
 
 // Surprise is an idea left for a recipient, with the author's name attached
 // for display.
@@ -147,7 +154,42 @@ func Open(path string) (*Store, error) {
 		db.Close()
 		return nil, fmt.Errorf("apply schema: %w", err)
 	}
+	if err := migrate(db); err != nil {
+		db.Close()
+		return nil, fmt.Errorf("migrate database: %w", err)
+	}
 	return &Store{db: db}, nil
+}
+
+// addedColumns lists columns introduced after a table first shipped.
+// CREATE TABLE IF NOT EXISTS leaves existing tables alone, so databases
+// created earlier get them added here.
+var addedColumns = []struct{ table, column, definition string }{
+	{"participant", "needs_time", "INTEGER NOT NULL DEFAULT 0"},
+}
+
+// migrate runs in one transaction, which takes the write lock up front, so
+// two processes opening an old database at once cannot both add a column.
+func migrate(db *sql.DB) error {
+	tx, err := db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	for _, c := range addedColumns {
+		var n int
+		if err := tx.QueryRow(
+			`SELECT COUNT(*) FROM pragma_table_info(?) WHERE name = ?`, c.table, c.column).Scan(&n); err != nil {
+			return err
+		}
+		if n > 0 {
+			continue
+		}
+		if _, err := tx.Exec(`ALTER TABLE ` + c.table + ` ADD COLUMN ` + c.column + ` ` + c.definition); err != nil {
+			return fmt.Errorf("add %s.%s: %w", c.table, c.column, err)
+		}
+	}
+	return tx.Commit()
 }
 
 // Close releases the database handle.
@@ -216,13 +258,13 @@ func (s *Store) CampaignByID(ctx context.Context, id int64) (Campaign, error) {
 		`SELECT `+campaignColumns+` FROM campaign WHERE id = ?`, id))
 }
 
-const participantColumns = `id, campaign_id, name, email, wishlist, surprises_open, token, created_at`
+const participantColumns = `id, campaign_id, name, email, wishlist, surprises_open, needs_time, token, created_at`
 
 func scanParticipant(row interface{ Scan(...any) error }) (Participant, error) {
 	var p Participant
 	var created string
 	err := row.Scan(&p.ID, &p.CampaignID, &p.Name, &p.Email, &p.Wishlist,
-		&p.SurprisesOpen, &p.Token, &created)
+		&p.SurprisesOpen, &p.NeedsTime, &p.Token, &created)
 	if errors.Is(err, sql.ErrNoRows) {
 		return Participant{}, ErrNotFound
 	}
@@ -367,12 +409,13 @@ func participants(ctx context.Context, q querier, campaignID int64) ([]Participa
 	return out, rows.Err()
 }
 
-// SetWishlist replaces somebody's wish list text. Wishes are final once the
-// campaign is drawn, so the giver's view cannot change under them.
-func (s *Store) SetWishlist(ctx context.Context, campaignID, participantID int64, text string) error {
+// SetWish replaces somebody's wish text and records whether they still want
+// time to think it over. Wishes are final once the campaign is drawn, so the
+// giver's view cannot change under them.
+func (s *Store) SetWish(ctx context.Context, campaignID, participantID int64, text string, needsTime bool) error {
 	return s.updateWhileOpen(ctx, campaignID,
-		`UPDATE participant SET wishlist = ? WHERE id = ? AND campaign_id = ?`,
-		text, participantID, campaignID)
+		`UPDATE participant SET wishlist = ?, needs_time = ? WHERE id = ? AND campaign_id = ?`,
+		text, needsTime, participantID, campaignID)
 }
 
 // SetSurprisesOpen decides whether others may leave surprise ideas for this
@@ -492,7 +535,7 @@ func (s *Store) Draw(ctx context.Context, campaignID int64) error {
 	}
 	ids := make([]int64, len(participants))
 	for i, p := range participants {
-		if !p.HasWish() {
+		if !p.Ready() {
 			return ErrNotReady
 		}
 		ids[i] = p.ID

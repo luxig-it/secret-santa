@@ -56,9 +56,17 @@ templ wishCard(p ParticipantPage) {
 		} else {
 			if !p.Me.HasWish() {
 				<p class="notice">Sobald du einen Wunsch hinterlegst, bist du bereit zur Auslosung. Ohne Wunsch kann nicht ausgelost werden.</p>
+			} else if p.Me.Thinking() {
+				<p class="notice">Du hast dir noch Bedenkzeit genommen und giltst deshalb noch nicht als bereit. Schalte sie aus, sobald dein Wunsch feststeht.</p>
 			}
 			<form method="post" action={ templ.URL(participantPath(p.Me.Token, "/wish")) } class="stack">
 				@MarkdownEditor("wishlist", "wishlist", "Was wünschst du dir?", p.Me.Wishlist, participantPath(p.Me.Token, "/preview"), "z. B.\n- ein gutes Buch\n- Schokolade")
+				<input type="hidden" name="needs_time" value="0"/>
+				<label class="switch switch-think">
+					<input type="checkbox" name="needs_time" value="1" checked?={ p.Me.NeedsTime } role="switch"/>
+					<span class="switch-track" aria-hidden="true"></span>
+					<span>Ich brauche noch Bedenkzeit <span class="muted">– dann gilt mein Wunsch noch nicht als fertig</span></span>
+				</label>
 				<button class="btn" type="submit">Wunsch speichern</button>
 			</form>
 		}

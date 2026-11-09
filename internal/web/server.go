@@ -224,6 +224,7 @@ var notices = map[string]views.Flash{
 	"joined":         {Kind: "ok", Text: "Willkommen! Speichere jetzt deinen persönlichen Link und trag deinen Wunsch ein."},
 	"wish":           {Kind: "ok", Text: "Dein Wunsch ist gespeichert."},
 	"wish-cleared":   {Kind: "ok", Text: "Dein Wunsch ist gelöscht. Ohne Wunsch bist du nicht bereit zur Auslosung."},
+	"wish-thinking":  {Kind: "ok", Text: "Dein Wunsch ist gespeichert. Du hast noch Bedenkzeit und giltst erst als bereit, wenn du sie ausschaltest."},
 	"open":           {Kind: "ok", Text: "Andere können jetzt Überraschungen für dich hinterlegen."},
 	"closed":         {Kind: "ok", Text: "Es können keine neuen Überraschungen mehr für dich hinterlegt werden."},
 	"surprise":       {Kind: "ok", Text: "Deine Überraschung ist gespeichert."},
@@ -233,7 +234,7 @@ var notices = map[string]views.Flash{
 	"unexcluded":     {Kind: "ok", Text: "Der Ausschluss ist aufgehoben."},
 	"drawn":          {Kind: "ok", Text: "Ausgelost! Alle sehen jetzt über ihren Link, wen sie beschenken."},
 	"drawn-already":  {Kind: "error", Text: "Die Kampagne ist bereits ausgelost, das ist nicht mehr möglich."},
-	"not-ready":      {Kind: "error", Text: "Es haben noch nicht alle einen Wunsch hinterlegt."},
+	"not-ready":      {Kind: "error", Text: "Noch sind nicht alle bereit: Es fehlen Wünsche, oder jemand braucht noch Bedenkzeit."},
 	"impossible":     {Kind: "error", Text: "Mit diesen Ausschlüssen ist keine Auslosung möglich. Hebe einen Ausschluss auf oder lade mehr Leute ein."},
 	"too-few":        {Kind: "error", Text: "Für eine Auslosung braucht es mindestens zwei Personen."},
 	"same-person":    {Kind: "error", Text: "Wähle zwei verschiedene Personen."},
@@ -250,6 +251,17 @@ func field(r *http.Request, name string, max int) (string, bool) {
 	v := strings.TrimSpace(r.PostFormValue(name))
 	v = strings.ReplaceAll(v, "\r\n", "\n")
 	return v, utf8.RuneCountInString(v) <= max && utf8.ValidString(v)
+}
+
+// checked reads a switch. Its form sends a hidden "0" and, when ticked, a
+// "1" after it, so an unticked box still arrives as an explicit "off".
+func checked(r *http.Request, name string) bool {
+	for _, v := range r.PostForm[name] {
+		if v == "1" {
+			return true
+		}
+	}
+	return false
 }
 
 func pathID(r *http.Request) (int64, bool) {
@@ -616,16 +628,25 @@ func (s *Server) saveWish(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	text, ok := field(r, "wishlist", maxText)
+	needsTime := checked(r, "needs_time")
 	if !ok {
-		me.Wishlist = text
+		// Show the form as submitted, switch included, so nothing the user
+		// chose is lost when they shorten the text.
+		me.Wishlist, me.NeedsTime = text, needsTime
 		s.renderParticipant(w, r, me, c, http.StatusUnprocessableEntity, notices["too-long"])
 		return
 	}
 	notice := "wish"
-	if text == "" {
+	switch {
+	case text == "":
+		// Time to think about no wish means nothing; dropping it keeps the
+		// promise that entering a wish makes one ready.
+		needsTime = false
 		notice = "wish-cleared"
+	case needsTime:
+		notice = "wish-thinking"
 	}
-	s.afterChange(w, r, "/p/"+me.Token, s.store.SetWishlist(r.Context(), c.ID, me.ID, text), notice)
+	s.afterChange(w, r, "/p/"+me.Token, s.store.SetWish(r.Context(), c.ID, me.ID, text, needsTime), notice)
 }
 
 func (s *Server) setSurprisesOpen(w http.ResponseWriter, r *http.Request) {
@@ -633,11 +654,7 @@ func (s *Server) setSurprisesOpen(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	// The form sends a hidden "0" and, when ticked, a "1" after it.
-	open := false
-	for _, v := range r.PostForm["open"] {
-		open = open || v == "1"
-	}
+	open := checked(r, "open")
 	notice := "closed"
 	if open {
 		notice = "open"

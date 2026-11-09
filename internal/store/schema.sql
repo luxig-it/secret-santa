@@ -18,6 +18,9 @@ CREATE TABLE IF NOT EXISTS participant (
     wishlist    TEXT    NOT NULL DEFAULT '',
     -- Whether other participants may leave surprise ideas for this person.
     surprises_open INTEGER NOT NULL DEFAULT 1,
+    -- Set while somebody wants to think their wish over; they are not
+    -- ready for the draw until they clear it.
+    needs_time  INTEGER NOT NULL DEFAULT 0,
     token       TEXT    NOT NULL UNIQUE,
     created_at  TEXT    NOT NULL
 );

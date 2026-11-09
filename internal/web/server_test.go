@@ -389,3 +389,35 @@ func TestAdminLinkShown(t *testing.T) {
 		t.Error("campaign list lacks the copy button for the admin link")
 	}
 }
+
+func TestNeedsTimeSwitch(t *testing.T) {
+	h := newHarness(t)
+	c := h.client()
+	org, join := h.setup()
+	anna := h.join(join, "Anna")
+	ben := h.join(join, "Ben")
+	h.post(c, "/p/"+anna+"/wish", url.Values{"wishlist": {"x"}})
+
+	// Hidden "0" plus ticked "1": Ben wants more time.
+	if _, loc := h.post(c, "/p/"+ben+"/wish", url.Values{"wishlist": {"y"}, "needs_time": {"0", "1"}}); !strings.Contains(loc, "wish-thinking") {
+		t.Fatalf("save with time to think: %q", loc)
+	}
+	if _, page := h.get(c, "/o/"+org); !strings.Contains(page, "1 von 2 bereit") || !strings.Contains(page, "Braucht noch Bedenkzeit") {
+		t.Error("organizer page does not show Ben as thinking")
+	}
+	if _, loc := h.post(c, "/o/"+org+"/draw", nil); !strings.Contains(loc, "not-ready") {
+		t.Fatalf("draw while Ben thinks: %q", loc)
+	}
+
+	// Clearing the wish drops the time to think with it.
+	h.post(c, "/p/"+ben+"/wish", url.Values{"wishlist": {""}, "needs_time": {"0", "1"}})
+	if p, _ := h.st.ParticipantByToken(t.Context(), ben); p.NeedsTime {
+		t.Error("an empty wish kept needs_time")
+	}
+
+	// Only the hidden "0": the switch is off again.
+	h.post(c, "/p/"+ben+"/wish", url.Values{"wishlist": {"y"}, "needs_time": {"0"}})
+	if _, loc := h.post(c, "/o/"+org+"/draw", nil); !strings.Contains(loc, "n=drawn") {
+		t.Fatalf("draw after Ben decided: %q", loc)
+	}
+}
