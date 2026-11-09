@@ -3,8 +3,13 @@ module github.com/luxig-it/secret-santa
 go 1.27
 
 require (
+	github.com/a-h/templ v0.3.1100
+	github.com/yuin/goldmark v1.8.7
+	modernc.org/sqlite v1.62.0
+)
+
+require (
 	github.com/a-h/parse v0.0.0-20250122154542-74294addb73e // indirect
-	github.com/a-h/templ v0.3.1100 // indirect
 	github.com/andybalholm/brotli v1.2.7 // indirect
 	github.com/cenkalti/backoff/v4 v4.3.0 // indirect
 	github.com/cli/browser v1.3.0 // indirect
@@ -25,7 +30,6 @@ require (
 	modernc.org/libc v1.80.1 // indirect
 	modernc.org/mathutil v1.7.1 // indirect
 	modernc.org/memory v1.12.1 // indirect
-	modernc.org/sqlite v1.62.0 // indirect
 )
 
 tool github.com/a-h/templ/cmd/templ
