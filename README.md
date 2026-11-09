@@ -68,10 +68,18 @@ docker run -p 8080:8080 -v secret-santa:/data \
 
 See [`.env.example`](.env.example) for every setting. Organizer labels must
 be unique, because campaigns are filed under them; renaming a label detaches
-that organizer's existing campaigns. Without
+that organizer's existing campaigns.
+
+With `SECRET_SANTA_ALLOW_EMAIL=true` and the `SECRET_SANTA_SMTP_*` settings,
+an "E-Mail" button next to the personal link (and the organizer's
+management link) sends that link to an address the person types in. The
+address is used for that one message and never stored or logged. Mail only
+goes out over STARTTLS (`SECRET_SANTA_SMTP_INSECURE=true` allows a local
+relay without it). Each link can be mailed three times an hour, each client
+address 30 times and each campaign 60 times; the mail carries only the
+campaign title and the link, never text that participants chose. Without
 `SECRET_SANTA_ORGANIZER_TOKENS` the app generates a key on start and prints
-it. Mail delivery is not implemented yet; links are shown on the pages and
-shared by hand.
+it. Without mail, links are shown on the pages and shared by hand.
 
 ## Layout
 
@@ -93,7 +101,8 @@ shared by hand.
   and images turned into links.
 - Failed organizer logins are limited to 10 per client address in 15 minutes.
   Behind a reverse proxy all clients share the proxy's address.
-- A lost private link is recovered by the organizer, who can copy every
+- A lost private link can be recovered by the person themselves if they had
+  it mailed, or by the organizer, who can copy every
   participant's link from the group on the campaign page. Opening such a
   link shows that person's page, after the draw including whom they give
   to, so organizers should only pass it to that person.

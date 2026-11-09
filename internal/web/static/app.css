@@ -99,7 +99,7 @@ footer.site { color: var(--muted); font-size: .85rem; text-align: center; }
 .flash-toast-gone { opacity: 0; transform: translate(-50%, -12px); pointer-events: none; }
 
 label { font-weight: 600; display: block; margin-bottom: 4px; }
-input[type=text], input[type=password], input[type=date], input:not([type]), select, textarea {
+input[type=text], input[type=password], input[type=date], input[type=email], input:not([type]), select, textarea {
   width: 100%;
   font: inherit;
   color: inherit;
@@ -145,9 +145,23 @@ input:focus, select:focus, textarea:focus, button:focus-visible, a:focus-visible
 .toolbar { display: flex; justify-content: space-between; align-items: center; padding-top: 8px; }
 
 .copy-field { margin-top: 12px; }
-.copy-row { display: flex; gap: 8px; }
+.copy-row { display: flex; gap: 8px; flex-wrap: wrap; }
 .copy-row input { font-family: ui-monospace, monospace; font-size: .85rem; }
 .copy-row .btn { flex: none; }
+.copy-row > input { flex: 1 1 200px; min-width: 0; }
+.email-send > summary { list-style: none; cursor: pointer; }
+.email-send > summary::-webkit-details-marker { display: none; }
+.email-form { margin-top: 12px; }
+.email-form label { font-weight: 500; }
+/* The form follows the toggle. Browsers without :has keep it visible, so it
+   is never out of reach. */
+@supports selector(:has(*)) {
+  .copy-field .email-form { display: none; }
+  .copy-field:has(.email-send[open]) .email-form { display: block; }
+}
+.email-send[open] > summary { border-color: var(--accent); background: var(--accent-soft); }
+.email-row { display: flex; gap: 8px; flex-wrap: wrap; }
+.email-row input { flex: 1 1 200px; min-width: 0; }
 .btn-copy { display: inline-flex; align-items: center; gap: 6px; }
 .btn-icon { padding: 6px 9px; }
 .btn-copy.copied { border-color: var(--green); color: var(--green); }

@@ -5,6 +5,7 @@ package config
 
 import (
 	"fmt"
+	"net/mail"
 	"os"
 	"strings"
 
@@ -30,6 +31,22 @@ type SMTP struct {
 // Enabled reports whether enough is configured to actually send mail.
 func (s SMTP) Enabled() bool { return s.Host != "" && s.From != "" }
 
+func (s SMTP) check() error {
+	if !s.Enabled() {
+		return fmt.Errorf("SECRET_SANTA_ALLOW_EMAIL needs SECRET_SANTA_SMTP_HOST and SECRET_SANTA_SMTP_FROM")
+	}
+	if _, err := mail.ParseAddress(s.From); err != nil {
+		return fmt.Errorf("SECRET_SANTA_SMTP_FROM %q is not an address like \"Wichteln <wichteln@example.com>\": %w", s.From, err)
+	}
+	if s.Port == "465" {
+		return fmt.Errorf("SECRET_SANTA_SMTP_PORT 465 (implicit TLS) is not supported; use the STARTTLS port, usually 587")
+	}
+	if (s.User == "") != (s.Pass == "") {
+		return fmt.Errorf("set both SECRET_SANTA_SMTP_USER and SECRET_SANTA_SMTP_PASS, or neither")
+	}
+	return nil
+}
+
 // Addr is the host:port net/smtp expects.
 func (s SMTP) Addr() string { return s.Host + ":" + s.Port }
 
@@ -40,6 +57,11 @@ type Config struct {
 	DBPath     string
 	Organizers []Organizer
 	SMTP       SMTP
+	// SMTPInsecure allows sending without STARTTLS, for a local relay.
+	SMTPInsecure bool
+	// AllowEmail offers sending personal and management links by mail.
+	// It requires a complete SMTP configuration.
+	AllowEmail bool
 
 	// GeneratedToken is set when no organizer token was configured and one was
 	// invented on the spot, so main can print it once.
@@ -60,6 +82,16 @@ func Load() (Config, error) {
 			From: env("SECRET_SANTA_SMTP_FROM", ""),
 		},
 	}
+	allow, err := parseBool(env("SECRET_SANTA_ALLOW_EMAIL", "false"))
+	if err != nil {
+		return Config{}, fmt.Errorf("SECRET_SANTA_ALLOW_EMAIL: %w", err)
+	}
+	c.AllowEmail = allow
+	insecure, err := parseBool(env("SECRET_SANTA_SMTP_INSECURE", "false"))
+	if err != nil {
+		return Config{}, fmt.Errorf("SECRET_SANTA_SMTP_INSECURE: %w", err)
+	}
+	c.SMTPInsecure = insecure
 
 	orgs, err := ParseOrganizers(env("SECRET_SANTA_ORGANIZER_TOKENS", ""))
 	if err != nil {
@@ -76,6 +108,13 @@ func Load() (Config, error) {
 
 	if c.SMTP.Host != "" && c.SMTP.From == "" {
 		return Config{}, fmt.Errorf("SECRET_SANTA_SMTP_FROM is required when SECRET_SANTA_SMTP_HOST is set")
+	}
+	if c.AllowEmail {
+		// Failing at start beats a button that fails on every click. Only
+		// checked when mail is on, so settings kept for later do no harm.
+		if err := c.SMTP.check(); err != nil {
+			return Config{}, err
+		}
 	}
 	return c, nil
 }
@@ -148,4 +187,14 @@ func env(key, def string) string {
 		return v
 	}
 	return def
+}
+
+func parseBool(v string) (bool, error) {
+	switch strings.ToLower(strings.TrimSpace(v)) {
+	case "1", "true", "yes", "on":
+		return true, nil
+	case "", "0", "false", "no", "off":
+		return false, nil
+	}
+	return false, fmt.Errorf("%q is not a yes/no value", v)
 }

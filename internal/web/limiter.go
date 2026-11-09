@@ -42,6 +42,23 @@ func (l *limiter) allow(key string) bool {
 }
 
 // fail records a failed attempt.
+// take checks and records one use in a single step, so parallel requests
+// cannot all pass before any of them counts.
+func (l *limiter) take(key string) bool {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	w := l.current(key)
+	if w == nil {
+		l.hits[key] = &window{start: l.now(), count: 1}
+		return true
+	}
+	if w.count >= l.max {
+		return false
+	}
+	w.count++
+	return true
+}
+
 func (l *limiter) fail(key string) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
