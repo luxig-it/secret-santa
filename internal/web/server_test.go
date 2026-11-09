@@ -496,3 +496,76 @@ func TestClosedSurprisesHiddenAfterDraw(t *testing.T) {
 		t.Error("Anna's result must show Ben's wish and not the idea he closed")
 	}
 }
+
+func TestWishlessOpensSurprisesAndAsksForHelp(t *testing.T) {
+	h := newHarness(t)
+	c := h.client()
+	org, join := h.setup()
+	anna := h.join(join, "Anna")
+	ben := h.join(join, "Ben")
+	carla := h.join(join, "Carla")
+	pBen, _ := h.st.ParticipantByToken(t.Context(), ben)
+
+	// Ben closes surprises, then flips "nothing comes to mind": that wins
+	// and opens surprises again.
+	h.post(c, "/p/"+ben+"/surprises", url.Values{"open": {"0"}})
+	if _, loc := h.post(c, "/p/"+ben+"/surprises", url.Values{"open": {"0"}, "suffices": {"0", "1"}}); !strings.Contains(loc, "n=suffices-opened") {
+		t.Fatalf("switch on while closed: %q", loc)
+	}
+	if p, _ := h.st.ParticipantByToken(t.Context(), ben); !p.SurprisesOpen || !p.SurpriseSuffices {
+		t.Fatalf("open=%v suffices=%v, want both on", p.SurprisesOpen, p.SurpriseSuffices)
+	}
+
+	banner := "Ben selbst ist wunschlos glücklich"
+	if _, page := h.get(c, "/p/"+anna); !strings.Contains(page, banner) || !strings.Contains(page, "member-help") {
+		t.Error("Anna sees no banner or highlight for Ben")
+	}
+	if _, page := h.get(c, "/p/"+ben); strings.Contains(page, banner) {
+		t.Error("Ben is asked to help himself")
+	}
+
+	// Once Anna helped, her banner goes; Carla still sees it.
+	h.post(c, "/p/"+anna+"/s/"+itoa(pBen.ID), url.Values{"body": {"idea"}})
+	if _, page := h.get(c, "/p/"+anna); strings.Contains(page, banner) {
+		t.Error("Anna still asked after leaving an idea")
+	}
+	if _, page := h.get(c, "/p/"+carla); !strings.Contains(page, banner) {
+		t.Error("Carla is no longer asked although she has not helped")
+	}
+
+	// After the draw nobody is asked any more.
+	h.post(c, "/p/"+anna+"/wish", url.Values{"wishlist": {"x"}})
+	h.post(c, "/p/"+carla+"/wish", url.Values{"wishlist": {"y"}})
+	if _, loc := h.post(c, "/o/"+org+"/draw", nil); !strings.Contains(loc, "n=drawn") {
+		t.Fatalf("draw: %q", loc)
+	}
+	if _, page := h.get(c, "/p/"+carla); strings.Contains(page, banner) || strings.Contains(page, "member-help") {
+		t.Error("banner or highlight shown after the draw")
+	}
+}
+
+func TestResolveSurpriseSwitches(t *testing.T) {
+	off := store.Participant{}
+	both := store.Participant{SurprisesOpen: true, SurpriseSuffices: true}
+	cases := []struct {
+		name           string
+		changed        string
+		open, suffices bool
+		before         store.Participant
+		wantOpen, want bool
+	}{
+		{"suffices on opens", "suffices", false, true, off, true, true},
+		{"closing ends suffices", "open", false, true, both, false, false},
+		// A stale tab still showing both off, where the user turns on
+		// suffices although the stored row already has it.
+		{"stale tab, suffices flipped", "suffices", false, true, both, true, true},
+		{"no JS: suffices newly on", "", false, true, off, true, true},
+		{"no JS: open flipped off", "", false, true, both, false, false},
+	}
+	for _, c := range cases {
+		open, suffices := resolveSurpriseSwitches(c.changed, c.open, c.suffices, c.before)
+		if open != c.wantOpen || suffices != c.want {
+			t.Errorf("%s: got open=%v suffices=%v, want %v %v", c.name, open, suffices, c.wantOpen, c.want)
+		}
+	}
+}

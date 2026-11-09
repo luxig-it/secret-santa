@@ -162,6 +162,21 @@ input:focus, select:focus, textarea:focus, button:focus-visible, a:focus-visible
 }
 .member:first-child { border-top: 0; }
 .member-me .member-name { color: var(--accent); }
+.member-help {
+  background: var(--gold-soft);
+  border-radius: 8px;
+  border-top-color: transparent;
+  padding-left: 10px;
+  padding-right: 10px;
+  margin: 4px -10px;
+}
+.member-help + .member { border-top-color: transparent; }
+.card-help {
+  border-color: var(--gold);
+  background: var(--gold-soft);
+  display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center; justify-content: space-between;
+}
+.card-help p { margin: 0; font-size: 1.05rem; }
 .member-name { grid-area: name; font-weight: 600; }
 .member-actions { grid-area: actions; justify-self: end; }
 .member-actions .btn { white-space: nowrap; }
@@ -176,6 +191,7 @@ input:focus, select:focus, textarea:focus, button:focus-visible, a:focus-visible
 .badge-no, .badge-wait { background: var(--grey-soft); color: var(--muted); }
 .badge-think { background: var(--gold-soft); color: var(--gold); }
 .badge-gift { background: var(--accent-soft); color: var(--accent); }
+.badge-help { background: var(--gold); color: var(--surface); font-weight: 700; }
 
 .campaigns, .exclusions { list-style: none; margin: 0 0 12px; padding: 0; }
 .campaigns li, .exclusions li {

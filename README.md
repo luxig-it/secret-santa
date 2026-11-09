@@ -25,8 +25,11 @@ The interface is German.
    status: wish entered, number of surprise ideas, ready for the draw.
 6. **Draw** – a participant is ready once they entered a wish, unless they
    switched on *Bedenkzeit* ("time to think") while saving it. Somebody who
-   switched on *Eine Überraschung genügt mir* is also ready without a wish as
-   soon as at least one surprise idea was left for them. When everybody
+   switched on *Mir fällt nichts ein und ich freue mich über eine Überraschung*
+   is also ready without a wish as soon as at least one surprise idea was left
+   for them. That switch turns surprises on, highlights them in the group, and
+   shows everybody else a friendly banner asking for an idea until they left
+   one. When everybody
    is ready the organizer draws. The result is a single cycle (nobody draws
    themselves, no pairs that only gift each other), honouring the organizer's
    exclusions.
