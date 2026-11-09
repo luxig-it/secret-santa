@@ -53,10 +53,6 @@ func (m Member) AwaitsSurprise() bool {
 	return !m.Ready() && m.Participant.ReadyWith(m.Surprises+1)
 }
 
-// SurpriseInsteadOfWish marks somebody who is ready only thanks to the
-// surprise ideas left for them.
-func (m Member) SurpriseInsteadOfWish() bool { return m.Ready() && !m.HasWish() }
-
 // CampaignPage is what every page about one campaign needs.
 type CampaignPage struct {
 	Campaign store.Campaign
@@ -132,6 +128,24 @@ func (p ParticipantPage) HelpWanted() []Member {
 		}
 	}
 	return out
+}
+
+// MyStatus is the one-line readiness of the viewer, for the top of their
+// page.
+func (p ParticipantPage) MyStatus() (ready bool, text string) {
+	m := p.MeMember()
+	switch {
+	case m.Ready() && m.HasWish():
+		return true, "Bereit – mein Wunsch ist hinterlegt"
+	case m.Ready():
+		return true, "Bereit – ich lasse mich überraschen"
+	case m.Thinking():
+		return false, "Nicht bereit – ich brauche noch Bedenkzeit"
+	case m.AwaitsSurprise():
+		return false, "Nicht bereit – noch keine Überraschung für mich hinterlegt"
+	default:
+		return false, "Nicht bereit – noch kein Wunsch hinterlegt"
+	}
 }
 
 // MySurpriseCount is how many ideas others left for the viewer that will

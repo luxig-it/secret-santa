@@ -171,6 +171,12 @@ input:focus, select:focus, textarea:focus, button:focus-visible, a:focus-visible
   margin: 4px -10px;
 }
 .member-help + .member { border-top-color: transparent; }
+.my-status {
+  display: inline-flex; gap: 8px; align-items: center;
+  margin: 0 0 12px; padding: 6px 14px; border-radius: 999px;
+  background: var(--grey-soft); color: var(--muted); font-weight: 600;
+}
+.my-status-ready { background: var(--green-soft); color: var(--green); }
 .card-help {
   border-color: var(--gold);
   background: var(--gold-soft);

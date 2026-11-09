@@ -439,8 +439,8 @@ func TestSurpriseSuffices(t *testing.T) {
 	}
 
 	h.post(c, "/p/"+anna+"/s/"+itoa(pBen.ID), url.Values{"body": {"IDEA-FOR-BEN"}})
-	if _, page := h.get(c, "/p/"+ben); !strings.Contains(page, "damit bist du bereit zur Auslosung") || strings.Contains(page, "IDEA-FOR-BEN") {
-		t.Errorf("Ben's page does not confirm readiness, or leaks the idea: %v %v", strings.Contains(page, "damit bist du bereit zur Auslosung"), strings.Contains(page, "IDEA-FOR-BEN"))
+	if _, page := h.get(c, "/p/"+ben); !strings.Contains(page, "Bereit – ich lasse mich überraschen") || strings.Contains(page, "IDEA-FOR-BEN") {
+		t.Errorf("Ben's page does not confirm readiness, or leaks the idea: %v %v", strings.Contains(page, "Bereit – ich lasse mich überraschen"), strings.Contains(page, "IDEA-FOR-BEN"))
 	}
 	if _, loc := h.post(c, "/o/"+org+"/draw", nil); !strings.Contains(loc, "n=drawn") {
 		t.Fatalf("draw: %q", loc)
@@ -580,5 +580,40 @@ func TestSurpriseCardExplainsWhatTheGiverSees(t *testing.T) {
 	h.post(c, "/p/"+ben+"/surprises", url.Values{"open": {"0"}})
 	if _, page := h.get(c, "/p/"+ben); !strings.Contains(page, "sieht nach der Auslosung nur deinen Wunsch") {
 		t.Error("closed surprises: the card does not say only the wish counts")
+	}
+}
+
+func TestOwnStatusLine(t *testing.T) {
+	h := newHarness(t)
+	c := h.client()
+	_, join := h.setup()
+	ben := h.join(join, "Ben")
+	anna := h.join(join, "Anna")
+	pBen, _ := h.st.ParticipantByToken(t.Context(), ben)
+	status := func() string {
+		t.Helper()
+		_, page := h.get(c, "/p/"+ben)
+		i := strings.Index(page, `id="mein-status"`)
+		if i < 0 {
+			t.Fatal("no status line")
+		}
+		j := strings.Index(page[i:], "</p>")
+		return page[i : i+j]
+	}
+	steps := []struct {
+		do   func()
+		want string
+	}{
+		{func() {}, "Nicht bereit – noch kein Wunsch hinterlegt"},
+		{func() { h.post(c, "/p/"+ben+"/wish", url.Values{"wishlist": {"x"}, "needs_time": {"0", "1"}}) }, "Nicht bereit – ich brauche noch Bedenkzeit"},
+		{func() { h.post(c, "/p/"+ben+"/wish", url.Values{"wishlist": {"x"}, "needs_time": {"0"}}) }, "Bereit – mein Wunsch ist hinterlegt"},
+		{func() { h.post(c, "/p/"+ben+"/wish", url.Values{"suffices": {"0", "1"}}) }, "Nicht bereit – noch keine Überraschung für mich hinterlegt"},
+		{func() { h.post(c, "/p/"+anna+"/s/"+itoa(pBen.ID), url.Values{"body": {"idea"}}) }, "Bereit – ich lasse mich überraschen"},
+	}
+	for _, s := range steps {
+		s.do()
+		if got := status(); !strings.Contains(got, s.want) {
+			t.Errorf("status %q, want %q", got, s.want)
+		}
 	}
 }
