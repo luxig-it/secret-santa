@@ -83,10 +83,12 @@ func (p CampaignPage) AllReady() bool {
 // ManagePage is the organizer's view of a campaign.
 type ManagePage struct {
 	CampaignPage
-	BaseURL    string
-	JoinURL    string
-	AdminURL   string
-	Exclusions []store.Exclusion
+	BaseURL  string
+	JoinURL  string
+	AdminURL string
+	// EmailAction is where the admin link's e-mail form posts; empty hides it.
+	EmailAction string
+	Exclusions  []store.Exclusion
 }
 
 // JoinPage invites people into a campaign.
@@ -100,6 +102,9 @@ type ParticipantPage struct {
 	CampaignPage
 	Me    store.Participant
 	MyURL string
+	// EmailAction is where the personal link's e-mail form posts; empty
+	// hides it.
+	EmailAction string
 	// Set after the draw only.
 	Receiver  *store.Participant
 	Surprises []store.Surprise

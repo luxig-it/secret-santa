@@ -1,6 +1,8 @@
 package web
 
 import (
+	"context"
+	"errors"
 	"io"
 	"log/slog"
 	"net/http"
@@ -11,9 +13,11 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/luxig-it/secret-santa/internal/config"
+	"github.com/luxig-it/secret-santa/internal/mail"
 	"github.com/luxig-it/secret-santa/internal/store"
 )
 
@@ -27,6 +31,28 @@ type harness struct {
 
 func newHarness(t *testing.T) *harness {
 	t.Helper()
+	return newHarnessWithMail(t, nil)
+}
+
+// fakeMailer records messages instead of sending them; err makes it fail.
+type fakeMailer struct {
+	mu   sync.Mutex
+	sent []mail.Message
+	err  error
+}
+
+func (f *fakeMailer) Send(_ context.Context, m mail.Message) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.err != nil {
+		return f.err
+	}
+	f.sent = append(f.sent, m)
+	return nil
+}
+
+func newHarnessWithMail(t *testing.T, mailer mail.Sender) *harness {
+	t.Helper()
 	st, err := store.Open(filepath.Join(t.TempDir(), "web.db"))
 	if err != nil {
 		t.Fatal(err)
@@ -36,7 +62,7 @@ func newHarness(t *testing.T) *harness {
 		BaseURL:    "http://example.test",
 		Organizers: []config.Organizer{{Label: "carsten", Token: orgSecret}},
 	}
-	srv := httptest.NewServer(New(cfg, st, slog.New(slog.NewTextHandler(io.Discard, nil))))
+	srv := httptest.NewServer(New(cfg, st, slog.New(slog.NewTextHandler(io.Discard, nil)), mailer))
 	t.Cleanup(srv.Close)
 	return &harness{t: t, srv: srv, st: st}
 }
@@ -781,5 +807,116 @@ func TestOrganizerPreviewsNeedAccess(t *testing.T) {
 	res.Body.Close()
 	if !strings.Contains(string(b), "<strong>ok</strong>") {
 		t.Errorf("preview with login: %q", b)
+	}
+}
+
+func TestEmailOffWhenNotConfigured(t *testing.T) {
+	h := newHarness(t)
+	_, join := h.setup()
+	ben := h.join(join, "Ben")
+	if _, page := h.get(h.client(), "/p/"+ben); strings.Contains(page, "✉ E-Mail") {
+		t.Error("e-mail button shown although mail is off")
+	}
+	if code, _ := h.post(h.client(), "/p/"+ben+"/email", url.Values{"email": {"ben@example.com"}}); code != 404 {
+		t.Errorf("e-mail post with mail off: %d", code)
+	}
+}
+
+func TestEmailPersonalAndAdminLink(t *testing.T) {
+	fm := &fakeMailer{}
+	h := newHarnessWithMail(t, fm)
+	c := h.client()
+	org, join := h.setup()
+	ben := h.join(join, "Ben")
+
+	_, page := h.get(c, "/p/"+ben)
+	if !strings.Contains(page, "✉ E-Mail") || !strings.Contains(page, `action="/p/`+ben+`/email"`) {
+		t.Fatal("participant page lacks the e-mail form")
+	}
+	if _, page := h.get(c, "/o/"+org); !strings.Contains(page, `action="/o/`+org+`/email"`) || strings.Count(page, "✉ E-Mail") != 1 {
+		t.Error("manage page should offer mail for the admin link only, not the join link")
+	}
+
+	if _, loc := h.post(c, "/p/"+ben+"/email", url.Values{"email": {" ben@example.com "}}); !strings.Contains(loc, "n=email-sent") {
+		t.Fatalf("send: %q", loc)
+	}
+	if _, loc := h.post(c, "/o/"+org+"/email", url.Values{"email": {"orga@example.com"}}); !strings.Contains(loc, "n=email-sent") {
+		t.Fatalf("send admin link: %q", loc)
+	}
+	if len(fm.sent) != 2 {
+		t.Fatalf("sent %d mails, want 2", len(fm.sent))
+	}
+	m := fm.sent[0]
+	if m.To != "ben@example.com" || !strings.Contains(m.Body, "http://example.test/p/"+ben) || !strings.Contains(m.Subject, "Büro") {
+		t.Errorf("personal mail = %+v", m)
+	}
+	if a := fm.sent[1]; a.To != "orga@example.com" || !strings.Contains(a.Body, "http://example.test/o/"+org) {
+		t.Errorf("admin mail = %+v", a)
+	}
+}
+
+func TestEmailRejectsBadAddressesAndFloods(t *testing.T) {
+	fm := &fakeMailer{}
+	h := newHarnessWithMail(t, fm)
+	c := h.client()
+	_, join := h.setup()
+	ben := h.join(join, "Ben")
+	for _, bad := range []string{"", "ben", "ben@example.com\r\nBcc: x@evil.test", "Ben <ben@example.com>", "a@example.com,b@example.com"} {
+		if _, loc := h.post(c, "/p/"+ben+"/email", url.Values{"email": {bad}}); !strings.Contains(loc, "n=email-invalid") {
+			t.Errorf("%q: %q", bad, loc)
+		}
+	}
+	if len(fm.sent) != 0 {
+		t.Fatalf("bad addresses sent mail: %+v", fm.sent)
+	}
+	for i := range mailsPerLinkMax {
+		if _, loc := h.post(c, "/p/"+ben+"/email", url.Values{"email": {"ben@example.com"}}); !strings.Contains(loc, "n=email-sent") {
+			t.Fatalf("mail %d: %q", i, loc)
+		}
+	}
+	if _, loc := h.post(c, "/p/"+ben+"/email", url.Values{"email": {"ben@example.com"}}); !strings.Contains(loc, "n=email-limit") {
+		t.Fatalf("over the limit: %q", loc)
+	}
+}
+
+func TestEmailFailureIsReported(t *testing.T) {
+	h := newHarnessWithMail(t, &fakeMailer{err: errors.New("smtp down")})
+	_, join := h.setup()
+	ben := h.join(join, "Ben")
+	if _, loc := h.post(h.client(), "/p/"+ben+"/email", url.Values{"email": {"ben@example.com"}}); !strings.Contains(loc, "n=email-failed") {
+		t.Fatalf("failing server: %q", loc)
+	}
+}
+
+func TestEmailParallelRequestsRespectTheLimit(t *testing.T) {
+	fm := &fakeMailer{}
+	h := newHarnessWithMail(t, fm)
+	_, join := h.setup()
+	ben := h.join(join, "Ben")
+	var wg sync.WaitGroup
+	for range 20 {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			res, err := h.client().PostForm(h.srv.URL+"/p/"+ben+"/email", url.Values{"email": {"victim@example.com"}})
+			if err == nil {
+				res.Body.Close()
+			}
+		}()
+	}
+	wg.Wait()
+	if len(fm.sent) != mailsPerLinkMax {
+		t.Fatalf("sent %d mails in parallel, want at most %d", len(fm.sent), mailsPerLinkMax)
+	}
+}
+
+func TestEmailBodyCarriesNoParticipantText(t *testing.T) {
+	fm := &fakeMailer{}
+	h := newHarnessWithMail(t, fm)
+	_, join := h.setup()
+	spam := h.join(join, "Dein Paket wartet: evil.test")
+	h.post(h.client(), "/p/"+spam+"/email", url.Values{"email": {"victim@example.com"}})
+	if len(fm.sent) != 1 || strings.Contains(fm.sent[0].Body+fm.sent[0].Subject, "evil.test") {
+		t.Fatalf("mail carries the participant's name: %+v", fm.sent)
 	}
 }

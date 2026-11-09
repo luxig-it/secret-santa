@@ -12,7 +12,7 @@ templ Manage(p ManagePage) {
 				<p class="muted">Die Auslosung ist erfolgt, es kann niemand mehr beitreten.</p>
 			} else {
 				<p>Schick diesen Link an alle, die mitmachen sollen – auch an dich selbst, wenn du mitwichteln willst. Wer ihn öffnet, trägt sich mit Namen ein und bekommt einen eigenen, geheimen Link.</p>
-				@CopyField("join-url", "Einladungslink", p.JoinURL)
+				@CopyField("join-url", "Einladungslink", p.JoinURL, "")
 			}
 		</section>
 		<section class="card" id="begruessung">
@@ -26,7 +26,7 @@ templ Manage(p ManagePage) {
 		<section class="card">
 			<h2>Verwaltung</h2>
 			<p>Über diesen Link kommst du jederzeit zurück auf diese Seite – auch ohne Anmeldung. Gib ihn nur an Leute weiter, die mitorganisieren sollen.</p>
-			@CopyField("admin-url", "Verwaltungslink", p.AdminURL)
+			@CopyField("admin-url", "Verwaltungslink", p.AdminURL, p.EmailAction)
 			<p class="hint">Wünsche, Überraschungsideen und die Zuordnung siehst du hier bewusst nicht.</p>
 			<p class="hint">Hat jemand den persönlichen Link verloren, kopiere ihn in der Gruppe über „Link kopieren“ und schick ihn nur dieser Person. Wer einen persönlichen Link öffnet, sieht die Seite dieser Person – nach der Auslosung also auch, wen sie beschenkt.</p>
 		</section>

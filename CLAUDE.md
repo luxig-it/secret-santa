@@ -38,4 +38,7 @@ rules; they are the spec.
 - Schema changes to existing tables need an entry in `addedColumns` in
   `internal/store/store.go`; `CREATE TABLE IF NOT EXISTS` alone does not
   reach existing databases.
-- Mail is not implemented yet; the SMTP settings are only validated.
+- Mail is optional (`SECRET_SANTA_ALLOW_EMAIL`): it only ever sends a
+  link to an address the person typed in, never stores the address, is
+  rate-limited per link and per IP, and never logs in without STARTTLS.
+  Handlers get a `mail.Sender`, nil when off; tests use a fake.

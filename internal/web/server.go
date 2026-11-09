@@ -22,6 +22,7 @@ import (
 
 	"github.com/luxig-it/secret-santa/internal/config"
 	"github.com/luxig-it/secret-santa/internal/draw"
+	"github.com/luxig-it/secret-santa/internal/mail"
 	"github.com/luxig-it/secret-santa/internal/markdown"
 	"github.com/luxig-it/secret-santa/internal/store"
 	"github.com/luxig-it/secret-santa/internal/web/views"
@@ -78,16 +79,27 @@ type Server struct {
 	log    *slog.Logger
 	secure bool
 	logins *limiter
+	// mailer is nil unless sending links by mail is switched on.
+	mailer           mail.Sender
+	mailsPerLink     *limiter
+	mailsPerIP       *limiter
+	mailsPerCampaign *limiter
 }
 
 // New wires up every route.
-func New(cfg config.Config, st *store.Store, log *slog.Logger) http.Handler {
+// New wires up every route. mailer may be nil, which hides every e-mail
+// button.
+func New(cfg config.Config, st *store.Store, log *slog.Logger, mailer mail.Sender) http.Handler {
 	s := &Server{
-		cfg:    cfg,
-		store:  st,
-		log:    log,
-		secure: strings.HasPrefix(cfg.BaseURL, "https://"),
-		logins: newLimiter(loginFailures, loginWindow),
+		cfg:              cfg,
+		store:            st,
+		log:              log,
+		secure:           strings.HasPrefix(cfg.BaseURL, "https://"),
+		logins:           newLimiter(loginFailures, loginWindow),
+		mailer:           mailer,
+		mailsPerLink:     newLimiter(mailsPerLinkMax, mailWindow),
+		mailsPerIP:       newLimiter(mailsPerIPMax, mailWindow),
+		mailsPerCampaign: newLimiter(mailsPerCampaignMax, mailWindow),
 	}
 
 	mux := http.NewServeMux()
@@ -107,6 +119,7 @@ func New(cfg config.Config, st *store.Store, log *slog.Logger) http.Handler {
 	mux.HandleFunc("POST /o/{token}/exclusions/{id}/delete", s.deleteExclusion)
 	mux.HandleFunc("POST /o/{token}/draw", s.draw)
 	mux.HandleFunc("POST /o/{token}/greeting", s.saveGreeting)
+	mux.HandleFunc("POST /o/{token}/email", s.mailAdminLink)
 	mux.HandleFunc("POST /o/{token}/preview", s.managePreview)
 
 	mux.HandleFunc("GET /j/{token}", s.joinPage)
@@ -118,6 +131,7 @@ func New(cfg config.Config, st *store.Store, log *slog.Logger) http.Handler {
 	mux.HandleFunc("GET /p/{token}/s/{id}", s.surprisePage)
 	mux.HandleFunc("POST /p/{token}/s/{id}", s.saveSurprise)
 	mux.HandleFunc("POST /p/{token}/preview", s.preview)
+	mux.HandleFunc("POST /p/{token}/email", s.mailPersonalLink)
 
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) { s.notFound(w, r) })
 
@@ -255,6 +269,11 @@ var notices = map[string]views.Flash{
 	"suffices-opened":      {Kind: "ok", Text: "Alles klar: Überraschungen für dich sind jetzt eingeschaltet. Sobald eine hinterlegt ist, bist du auch ohne eigenen Wunsch bereit."},
 	"closed-suffices-wish": {Kind: "ok", Text: "Es können keine neuen Überraschungen mehr für dich hinterlegt werden. Dein eingetragener Wunsch zählt jetzt wieder."},
 	"thinking-needs-wish":  {Kind: "error", Text: "Bedenkzeit gibt es nur für einen eingetragenen Wunsch – schreib zuerst etwas hinein."},
+	"email-sent":           {Kind: "ok", Text: "Der Link ist unterwegs. Schau in dein Postfach – und notfalls in den Spam-Ordner."},
+	"email-invalid":        {Kind: "error", Text: "Das sieht nicht nach einer E-Mail-Adresse aus."},
+	"email-limit":          {Kind: "error", Text: "Für diesen Link wurden gerade schon einige E-Mails verschickt. Bitte versuch es später noch einmal."},
+	"email-busy":           {Kind: "error", Text: "Gerade wurden sehr viele E-Mails verschickt. Bitte versuch es später noch einmal oder kopiere den Link."},
+	"email-failed":         {Kind: "error", Text: "Die E-Mail konnte gerade nicht verschickt werden. Bitte versuch es später noch einmal oder kopiere den Link."},
 	"greeting":             {Kind: "ok", Text: "Der Begrüßungstext ist gespeichert."},
 	"greeting-cleared":     {Kind: "ok", Text: "Der Begrüßungstext ist entfernt."},
 	"wish-back":            {Kind: "ok", Text: "Dein Wunsch zählt wieder."},
@@ -473,6 +492,7 @@ func (s *Server) manage(w http.ResponseWriter, r *http.Request) {
 		CampaignPage: views.CampaignPage{Campaign: c, Members: members, Flash: noticeFrom(r)},
 		BaseURL:      s.cfg.BaseURL,
 		JoinURL:      views.JoinURL(s.cfg.BaseURL, c.JoinToken),
+		EmailAction:  s.emailAction("/o/" + c.OrganizerToken),
 		AdminURL:     views.OrganizerURL(s.cfg.BaseURL, c.OrganizerToken),
 		Exclusions:   excl,
 	}))
@@ -656,6 +676,7 @@ func (s *Server) renderParticipant(w http.ResponseWriter, r *http.Request, me st
 		CampaignPage: views.CampaignPage{Campaign: c, Members: members, Flash: f},
 		Me:           me,
 		MyURL:        views.ParticipantURL(s.cfg.BaseURL, me.Token),
+		EmailAction:  s.emailAction("/p/" + me.Token),
 	}
 	if c.Drawn() {
 		receiver, err := s.store.Receiver(ctx, c.ID, me.ID)
@@ -882,4 +903,98 @@ func (s *Server) saveGreeting(w http.ResponseWriter, r *http.Request) {
 		notice = "greeting-cleared"
 	}
 	s.afterChange(w, r, "/o/"+c.OrganizerToken, s.store.SetGreeting(r.Context(), c.ID, text), notice)
+}
+
+// --- links by mail -------------------------------------------------------------
+
+// Mail limits within the window. A real person needs one or two mails; the
+// limits stop the form from being used to flood an inbox. The per-client
+// limit is generous because behind a reverse proxy every client shares one
+// address; the per-campaign limit caps what one join link can send in all.
+const (
+	mailsPerLinkMax     = 3
+	mailsPerIPMax       = 30
+	mailsPerCampaignMax = 60
+	mailWindow          = time.Hour
+)
+
+// emailAction is where a link's e-mail form posts to, or "" when mail is off,
+// which hides the button.
+func (s *Server) emailAction(page string) string {
+	if s.mailer == nil {
+		return ""
+	}
+	return page + "/email"
+}
+
+// The mails carry only text the organizer chose (the campaign title) and
+// the link itself. Participant names come from anybody with the join link,
+// so they stay out: the form must not become a way to send arbitrary text
+// to arbitrary addresses.
+
+func (s *Server) mailPersonalLink(w http.ResponseWriter, r *http.Request) {
+	me, c, ok := s.me(w, r)
+	if !ok {
+		return
+	}
+	link := views.ParticipantURL(s.cfg.BaseURL, me.Token)
+	s.mailLink(w, r, c, "/p/"+me.Token, "p:"+me.Token, mail.Message{
+		Subject: "Dein Wichtel-Link für „" + c.Title + "“",
+		Body: "Hallo,\n\n" +
+			"hier ist dein persönlicher Link zum Wichteln „" + c.Title + "“:\n\n" +
+			link + "\n\n" +
+			"Über diesen Link trägst du deinen Wunsch ein und siehst nach der Auslosung, wen du beschenkst. " +
+			"Bewahre ihn gut auf und gib ihn nicht weiter.\n\n" +
+			"Du hast diese E-Mail selbst angefordert. Falls nicht, kannst du sie einfach löschen.\n",
+	})
+}
+
+func (s *Server) mailAdminLink(w http.ResponseWriter, r *http.Request) {
+	c, ok := s.organizerAction(w, r)
+	if !ok {
+		return
+	}
+	link := views.OrganizerURL(s.cfg.BaseURL, c.OrganizerToken)
+	s.mailLink(w, r, c, "/o/"+c.OrganizerToken, "o:"+c.OrganizerToken, mail.Message{
+		Subject: "Verwaltungslink für „" + c.Title + "“",
+		Body: "Hallo,\n\n" +
+			"hier ist der Verwaltungslink für das Wichteln „" + c.Title + "“:\n\n" +
+			link + "\n\n" +
+			"Über ihn lädst du ein, legst Ausschlüsse fest und lost aus. Gib ihn nur an Leute weiter, die mitorganisieren.\n\n" +
+			"Du hast diese E-Mail selbst angefordert. Falls nicht, kannst du sie einfach löschen.\n",
+	})
+}
+
+// mailLink validates the typed address, applies the limits and sends. The
+// address is used for this one message only: never stored, never logged.
+func (s *Server) mailLink(w http.ResponseWriter, r *http.Request, c store.Campaign, back, key string, m mail.Message) {
+	if s.mailer == nil {
+		s.notFound(w, r)
+		return
+	}
+	to, err := mail.Address(r.PostFormValue("email"))
+	if err != nil {
+		redirect(w, r, back, "email-invalid")
+		return
+	}
+	ip := clientIP(r)
+	switch {
+	case !s.mailsPerLink.take(key):
+		redirect(w, r, back, "email-limit")
+		return
+	case !s.mailsPerIP.take(ip), !s.mailsPerCampaign.take(strconv.FormatInt(c.ID, 10)):
+		s.log.Warn("mail limit reached", "remote", ip, "campaign", c.ID)
+		redirect(w, r, back, "email-busy")
+		return
+	}
+
+	m.To = to
+	if err := s.mailer.Send(r.Context(), m); err != nil {
+		// Mail servers like to quote the recipient in their errors.
+		s.log.Error("send mail", "err", strings.ReplaceAll(err.Error(), to, "<recipient>"))
+		redirect(w, r, back, "email-failed")
+		return
+	}
+	s.log.Info("link sent by mail", "kind", key[:1], "campaign", c.ID)
+	redirect(w, r, back, "email-sent")
 }

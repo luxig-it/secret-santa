@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/luxig-it/secret-santa/internal/config"
+	"github.com/luxig-it/secret-santa/internal/mail"
 	"github.com/luxig-it/secret-santa/internal/store"
 	"github.com/luxig-it/secret-santa/internal/web"
 )
@@ -44,7 +45,7 @@ func run(log *slog.Logger) error {
 
 	srv := &http.Server{
 		Addr:              cfg.Addr,
-		Handler:           web.New(cfg, st, log),
+		Handler:           web.New(cfg, st, log, mailer(cfg)),
 		ReadHeaderTimeout: 10 * time.Second,
 		ReadTimeout:       30 * time.Second,
 		WriteTimeout:      30 * time.Second,
@@ -74,4 +75,13 @@ func run(log *slog.Logger) error {
 		}
 	}
 	return nil
+}
+
+// mailer returns the SMTP sender when links may be sent by mail, else nil.
+func mailer(cfg config.Config) mail.Sender {
+	if !cfg.AllowEmail {
+		return nil
+	}
+	s := cfg.SMTP
+	return mail.NewSMTP(s.Host, s.Port, s.User, s.Pass, s.From, cfg.SMTPInsecure)
 }

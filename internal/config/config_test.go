@@ -64,3 +64,42 @@ func TestMatchOrganizer(t *testing.T) {
 		t.Error("empty secret matched")
 	}
 }
+
+func TestLoadEmail(t *testing.T) {
+	base := map[string]string{"SECRET_SANTA_ORGANIZER_TOKENS": "a:long-enough-token"}
+	cases := []struct {
+		name    string
+		env     map[string]string
+		wantErr bool
+		allow   bool
+	}{
+		{"off by default", nil, false, false},
+		{"on with smtp", map[string]string{"SECRET_SANTA_ALLOW_EMAIL": "true", "SECRET_SANTA_SMTP_HOST": "smtp.example.com", "SECRET_SANTA_SMTP_FROM": "x@example.com"}, false, true},
+		{"on without smtp", map[string]string{"SECRET_SANTA_ALLOW_EMAIL": "1"}, true, false},
+		{"garbage flag", map[string]string{"SECRET_SANTA_ALLOW_EMAIL": "maybe"}, true, false},
+		{"implicit tls port", map[string]string{"SECRET_SANTA_ALLOW_EMAIL": "on", "SECRET_SANTA_SMTP_HOST": "h", "SECRET_SANTA_SMTP_FROM": "x@example.com", "SECRET_SANTA_SMTP_PORT": "465"}, true, false},
+		{"user without pass", map[string]string{"SECRET_SANTA_ALLOW_EMAIL": "on", "SECRET_SANTA_SMTP_HOST": "h", "SECRET_SANTA_SMTP_FROM": "x@example.com", "SECRET_SANTA_SMTP_USER": "u"}, true, false},
+		{"malformed sender", map[string]string{"SECRET_SANTA_ALLOW_EMAIL": "on", "SECRET_SANTA_SMTP_HOST": "h", "SECRET_SANTA_SMTP_FROM": "Wichteln wichteln@example.com"}, true, false},
+		{"odd settings are fine while mail is off", map[string]string{"SECRET_SANTA_SMTP_HOST": "h", "SECRET_SANTA_SMTP_FROM": "x@example.com", "SECRET_SANTA_SMTP_PORT": "465"}, false, false},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			for _, k := range []string{"SECRET_SANTA_ALLOW_EMAIL", "SECRET_SANTA_SMTP_INSECURE", "SECRET_SANTA_SMTP_HOST", "SECRET_SANTA_SMTP_FROM", "SECRET_SANTA_SMTP_PORT", "SECRET_SANTA_SMTP_USER", "SECRET_SANTA_SMTP_PASS"} {
+				t.Setenv(k, "")
+			}
+			for k, v := range base {
+				t.Setenv(k, v)
+			}
+			for k, v := range c.env {
+				t.Setenv(k, v)
+			}
+			cfg, err := Load()
+			if (err != nil) != c.wantErr {
+				t.Fatalf("err = %v, want error %v", err, c.wantErr)
+			}
+			if err == nil && cfg.AllowEmail != c.allow {
+				t.Fatalf("AllowEmail = %v, want %v", cfg.AllowEmail, c.allow)
+			}
+		})
+	}
+}

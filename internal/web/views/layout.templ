@@ -115,7 +115,9 @@ templ GreetingCard(c store.Campaign) {
 	}
 }
 
-templ CopyField(id, label, value string) {
+// CopyField shows a link with a copy button. With an emailAction it also
+// offers to send the link by mail; the form folds open without JavaScript.
+templ CopyField(id, label, value, emailAction string) {
 	<div class="copy-field">
 		<label for={ id }>{ label }</label>
 		<div class="copy-row">
@@ -124,7 +126,24 @@ templ CopyField(id, label, value string) {
 				@copyIcon()
 				<span class="copy-label" aria-live="polite">Kopieren</span>
 			</button>
+			if emailAction != "" {
+				// Only the toggle sits in the row; the form below opens with it
+				// (see app.css), so the button stays next to the link.
+				<details class="email-send">
+					<summary class="btn btn-secondary">✉ E-Mail</summary>
+				</details>
+			}
 		</div>
+		if emailAction != "" {
+			<form method="post" action={ templ.URL(emailAction) } class="email-form">
+				<label for={ id + "-email" }>Link an diese Adresse schicken</label>
+				<div class="email-row">
+					<input id={ id + "-email" } name="email" type="email" required autocomplete="email" maxlength="254" placeholder="name@example.com"/>
+					<button class="btn" type="submit">Senden</button>
+				</div>
+				<p class="hint">Die Adresse wird nur für diese E-Mail benutzt und nicht gespeichert.</p>
+			</form>
+		}
 	</div>
 }
 

@@ -63,6 +63,13 @@
     }, 1500);
   });
 
+  // Opening "E-Mail" puts the cursor into its address field.
+  for (const d of document.querySelectorAll("details.email-send")) {
+    d.addEventListener("toggle", () => {
+      if (d.open) d.closest(".copy-field")?.querySelector(".email-form input")?.focus();
+    });
+  }
+
   // Confirmation for destructive forms and buttons.
   document.addEventListener("submit", (ev) => {
     const btn = ev.submitter;

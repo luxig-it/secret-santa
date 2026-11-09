@@ -18,7 +18,7 @@ templ Participant(p ParticipantPage) {
 			@CampaignFacts(p.Campaign)
 			@Greeting(p.Campaign)
 			<p>Das ist <b>dein persönlicher Link</b>. Speichere ihn als Lesezeichen und gib ihn nicht weiter – wer ihn hat, sieht, wen du beschenkst.</p>
-			@CopyField("my-url", "Dein Link", p.MyURL)
+			@CopyField("my-url", "Dein Link", p.MyURL, p.EmailAction)
 		</section>
 		if p.Receiver != nil {
 			// After the draw the page is about the person one gives to; one's
