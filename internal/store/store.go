@@ -86,18 +86,24 @@ type Participant struct {
 	CreatedAt        time.Time
 }
 
-// HasWish reports whether a wish has been entered.
-func (p Participant) HasWish() bool { return strings.TrimSpace(p.Wishlist) != "" }
+// HasWishText reports whether anything is written in the wish field.
+func (p Participant) HasWishText() bool { return strings.TrimSpace(p.Wishlist) != "" }
+
+// HasWish reports whether the wish counts: something is written and the
+// participant has not said that nothing comes to mind. While they hope for a
+// surprise instead, a wish they wrote earlier stays stored but is ignored –
+// for readiness and for what their giver is shown.
+func (p Participant) HasWish() bool { return p.HasWishText() && !p.SurpriseSuffices }
 
 // ReadyWith reports whether somebody may be drawn, given how many surprise
-// ideas were left for them. They need either a wish or, if they said a
-// surprise is enough, at least one surprise idea. Asking for time to think
-// holds them back in either case: it is an explicit "not yet".
+// ideas were left for them. Somebody who hopes for a surprise needs at least
+// one surprise idea; anybody else needs a wish and must not have asked for
+// time to think.
 func (p Participant) ReadyWith(surprises int) bool {
-	if p.NeedsTime {
-		return false
+	if p.SurpriseSuffices {
+		return surprises > 0
 	}
-	return p.HasWish() || (p.SurpriseSuffices && surprises > 0)
+	return p.HasWish() && !p.NeedsTime
 }
 
 // Thinking reports a wish that is entered but not final yet.
@@ -180,15 +186,6 @@ var addedColumns = []struct{ table, column, definition string }{
 
 // migrate runs in one transaction, which takes the write lock up front, so
 // two processes opening an old database at once cannot both add a column.
-// dataFixes bring rows written under older rules in line with the current
-// invariants. Each must be safe to run on every start.
-var dataFixes = []string{
-	// Hoping for a surprise used to be possible next to a wish; now it
-	// replaces the wish. Keep the wish, which is what the giver would see.
-	`UPDATE participant SET surprise_suffices = 0
-	 WHERE surprise_suffices = 1 AND trim(wishlist) <> ''`,
-}
-
 func migrate(db *sql.DB) error {
 	tx, err := db.Begin()
 	if err != nil {
@@ -206,11 +203,6 @@ func migrate(db *sql.DB) error {
 		}
 		if _, err := tx.Exec(`ALTER TABLE ` + c.table + ` ADD COLUMN ` + c.column + ` ` + c.definition); err != nil {
 			return fmt.Errorf("add %s.%s: %w", c.table, c.column, err)
-		}
-	}
-	for _, q := range dataFixes {
-		if _, err := tx.Exec(q); err != nil {
-			return fmt.Errorf("data fix: %w", err)
 		}
 	}
 	return tx.Commit()
@@ -434,18 +426,16 @@ func participants(ctx context.Context, q querier, campaignID int64) ([]Participa
 }
 
 // SetWish replaces somebody's wish text and records whether they still want
-// time to think it over, or whether nothing comes to mind and they hope for a
-// surprise instead ("suffices"). Hoping for a surprise replaces the wish: it
-// clears the text and the time to think, and it allows surprises. Wishes are
-// final once the campaign is drawn, so the giver's view cannot change under
-// them.
+// time to think it over, and whether nothing comes to mind and they hope for
+// a surprise instead ("suffices"). Hoping for a surprise keeps the text – it
+// only stops counting (see HasWish), so switching back brings it back – and
+// it allows surprises. Wishes are final once the campaign is drawn, so the
+// giver's view cannot change under them.
 func (s *Store) SetWish(ctx context.Context, campaignID, participantID int64, text string, needsTime, suffices bool) error {
-	if suffices {
-		text = ""
-	}
-	if strings.TrimSpace(text) == "" {
-		// Time to think about no wish means nothing; dropping it keeps the
-		// promise that entering a wish makes one ready.
+	if strings.TrimSpace(text) == "" || suffices {
+		// Time to think about no wish, or about one set aside, means
+		// nothing; dropping it keeps "your wish counts again" true when the
+		// wish comes back.
 		needsTime = false
 	}
 	return s.updateWhileOpen(ctx, campaignID,

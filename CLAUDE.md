@@ -23,8 +23,12 @@ rules; they are the spec.
   - The organizer page shows no wishes, ideas or assignments. It does offer
     each participant's personal link to copy, for lost links; the join page
     and other participants' pages never show anybody else's link.
-- Readiness is `Participant.ReadyWith(surpriseCount)`: no `needs_time`, and
-  either a wish or `surprise_suffices` with at least one surprise idea. The
+- `HasWish()` means the wish *counts*: text is there and `surprise_suffices`
+  is off; with it on, the text is kept but ignored everywhere, the giver's
+  view included. `HasWishText()` is only for "is anything written".
+- Readiness is `Participant.ReadyWith(surpriseCount)`: with
+  `surprise_suffices`, at least one surprise idea; otherwise a counting wish
+  and no `needs_time`. The
   draw checks it inside its transaction; views use `Member.Ready()`. After the draw nothing changes any more.
 - Every store write that depends on campaign state checks it inside its
   transaction (`requireOpen`); the DSN takes the write lock up front.

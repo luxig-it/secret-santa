@@ -184,6 +184,8 @@ input:focus, select:focus, textarea:focus, button:focus-visible, a:focus-visible
   background: var(--grey-soft); color: var(--muted); font-weight: 600;
 }
 .my-status-ready { background: var(--green-soft); color: var(--green); }
+.card-mine > summary { cursor: pointer; font-weight: 600; font-size: 1.05rem; }
+.card-mine[open] > summary { margin-bottom: 12px; }
 .card-help {
   border-color: var(--gold);
   background: var(--gold-soft);

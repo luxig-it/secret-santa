@@ -507,14 +507,17 @@ func TestWishlessOpensSurprisesAndAsksForHelp(t *testing.T) {
 	pBen, _ := h.st.ParticipantByToken(t.Context(), ben)
 
 	// Ben closes surprises and has a draft wish, then switches on "nothing
-	// comes to mind": that opens surprises again and clears the draft.
+	// comes to mind": that opens surprises again and sets the draft aside.
 	h.post(c, "/p/"+ben+"/surprises", url.Values{"open": {"0"}})
 	h.post(c, "/p/"+ben+"/wish", url.Values{"wishlist": {"draft"}, "needs_time": {"0", "1"}})
 	if _, loc := h.post(c, "/p/"+ben+"/wish", url.Values{"wishlist": {"draft"}, "needs_time": {"0", "1"}, "suffices": {"0", "1"}}); !strings.Contains(loc, "n=suffices-opened") {
 		t.Fatalf("switch on while closed: %q", loc)
 	}
-	if p, _ := h.st.ParticipantByToken(t.Context(), ben); !p.SurprisesOpen || !p.SurpriseSuffices || p.HasWish() || p.NeedsTime {
-		t.Fatalf("open=%v suffices=%v wish=%q needsTime=%v, want open, suffices, no wish, no time", p.SurprisesOpen, p.SurpriseSuffices, p.Wishlist, p.NeedsTime)
+	if p, _ := h.st.ParticipantByToken(t.Context(), ben); !p.SurprisesOpen || !p.SurpriseSuffices || p.HasWish() || p.Wishlist != "draft" {
+		t.Fatalf("open=%v suffices=%v counts=%v wish=%q, want open, suffices, the draft kept but not counting", p.SurprisesOpen, p.SurpriseSuffices, p.HasWish(), p.Wishlist)
+	}
+	if _, page := h.get(c, "/p/"+ben); !strings.Contains(page, "wird gerade nicht beachtet") {
+		t.Error("Ben is not warned that his wish is set aside")
 	}
 	// While it is on, the editor is gone.
 	if _, page := h.get(c, "/p/"+ben); strings.Contains(page, `name="wishlist"`) || strings.Contains(page, "Bedenkzeit") {
@@ -645,5 +648,60 @@ func TestOrganizerCanCopyPersonalLinks(t *testing.T) {
 	}
 	if _, page := h.get(c, "/p/"+ben); strings.Contains(page, anna) {
 		t.Error("Ben's page exposes Anna's personal token")
+	}
+}
+
+func TestSetAsideWishIsHiddenFromTheGiver(t *testing.T) {
+	h := newHarness(t)
+	c := h.client()
+	org, join := h.setup()
+	anna := h.join(join, "Anna")
+	ben := h.join(join, "Ben")
+	pBen, _ := h.st.ParticipantByToken(t.Context(), ben)
+	h.post(c, "/p/"+anna+"/wish", url.Values{"wishlist": {"x"}})
+	h.post(c, "/p/"+ben+"/wish", url.Values{"wishlist": {"SET-ASIDE-WISH"}, "suffices": {"0", "1"}})
+	h.post(c, "/p/"+anna+"/s/"+itoa(pBen.ID), url.Values{"body": {"IDEA-FOR-BEN"}})
+	if _, loc := h.post(c, "/o/"+org+"/draw", nil); !strings.Contains(loc, "n=drawn") {
+		t.Fatalf("draw: %q", loc)
+	}
+	// Two people: Anna gives to Ben.
+	_, page := h.get(c, "/p/"+anna)
+	if strings.Contains(page, "SET-ASIDE-WISH") || !strings.Contains(page, "IDEA-FOR-BEN") || !strings.Contains(page, "keinen eigenen Wunsch") {
+		t.Error("Anna must see the idea and the no-wish note, not Ben's set-aside wish")
+	}
+	// Ben's own side is folded away at the bottom after the draw.
+	if _, page := h.get(c, "/p/"+ben); !strings.Contains(page, `<details class="card card-mine"`) || strings.Contains(page, `id="wunsch"`) {
+		t.Error("after the draw Ben's page should show his own side folded away, not the wish card")
+	}
+}
+
+func TestThinkingWithoutAWishIsExplained(t *testing.T) {
+	h := newHarness(t)
+	c := h.client()
+	_, join := h.setup()
+	ben := h.join(join, "Ben")
+	if _, loc := h.post(c, "/p/"+ben+"/wish", url.Values{"wishlist": {""}, "needs_time": {"0", "1"}}); !strings.Contains(loc, "n=thinking-needs-wish") {
+		t.Fatalf("Bedenkzeit on an empty wish: %q", loc)
+	}
+}
+
+func TestTooLongDraftIsKeptWhenSwitching(t *testing.T) {
+	h := newHarness(t)
+	c := h.client()
+	_, join := h.setup()
+	ben := h.join(join, "Ben")
+	h.post(c, "/p/"+ben+"/wish", url.Values{"wishlist": {"stored"}})
+	draft := strings.Repeat("ä", maxText+1)
+	res, err := c.PostForm(h.srv.URL+"/p/"+ben+"/wish", url.Values{"wishlist": {draft}, "suffices": {"0", "1"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	body, _ := io.ReadAll(res.Body)
+	res.Body.Close()
+	if res.StatusCode != http.StatusUnprocessableEntity || !strings.Contains(string(body), draft) {
+		t.Fatalf("status %d, draft shown again: %v", res.StatusCode, strings.Contains(string(body), draft))
+	}
+	if p, _ := h.st.ParticipantByToken(t.Context(), ben); p.Wishlist != "stored" || p.SurpriseSuffices {
+		t.Fatalf("a rejected post changed the row: %+v", p)
 	}
 }

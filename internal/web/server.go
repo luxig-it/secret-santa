@@ -220,30 +220,33 @@ func redirect(w http.ResponseWriter, r *http.Request, path, notice string) {
 }
 
 var notices = map[string]views.Flash{
-	"created":         {Kind: "ok", Text: "Die Kampagne ist angelegt. Verschicke jetzt den Einladungslink."},
-	"joined":          {Kind: "ok", Text: "Willkommen! Speichere jetzt deinen persönlichen Link und trag deinen Wunsch ein."},
-	"wish":            {Kind: "ok", Text: "Dein Wunsch ist gespeichert."},
-	"wish-cleared":    {Kind: "ok", Text: "Dein Wunsch ist gelöscht. Ohne Wunsch bist du nicht bereit zur Auslosung."},
-	"wish-thinking":   {Kind: "ok", Text: "Dein Wunsch ist gespeichert. Du hast noch Bedenkzeit und giltst erst als bereit, wenn du sie ausschaltest."},
-	"open":            {Kind: "ok", Text: "Andere können jetzt Überraschungen für dich hinterlegen."},
-	"closed":          {Kind: "ok", Text: "Es können keine neuen Überraschungen mehr für dich hinterlegt werden."},
-	"closed-suffices": {Kind: "ok", Text: "Es können keine neuen Überraschungen mehr für dich hinterlegt werden. Damit wartest du auch nicht mehr auf eine Überraschung – trag einen Wunsch ein, um bereit zu sein."},
-	"suffices":        {Kind: "ok", Text: "Alles klar: Sobald eine Überraschung für dich hinterlegt ist, bist du auch ohne eigenen Wunsch bereit. Die anderen sehen, dass sie dir helfen können."},
-	"suffices-opened": {Kind: "ok", Text: "Alles klar: Überraschungen für dich sind jetzt eingeschaltet. Sobald eine hinterlegt ist, bist du auch ohne eigenen Wunsch bereit."},
-	"suffices-off":    {Kind: "ok", Text: "Alles klar – trag jetzt deinen Wunsch ein, um bereit zu sein."},
-	"surprise":        {Kind: "ok", Text: "Deine Überraschung ist gespeichert."},
-	"surprise-gone":   {Kind: "ok", Text: "Deine Überraschung ist gelöscht."},
-	"removed":         {Kind: "ok", Text: "Die Person wurde entfernt."},
-	"excluded":        {Kind: "ok", Text: "Der Ausschluss ist gespeichert."},
-	"unexcluded":      {Kind: "ok", Text: "Der Ausschluss ist aufgehoben."},
-	"drawn":           {Kind: "ok", Text: "Ausgelost! Alle sehen jetzt über ihren Link, wen sie beschenken."},
-	"drawn-already":   {Kind: "error", Text: "Die Kampagne ist bereits ausgelost, das ist nicht mehr möglich."},
-	"not-ready":       {Kind: "error", Text: "Noch sind nicht alle bereit: Es fehlen Wünsche oder Überraschungen, oder jemand braucht noch Bedenkzeit."},
-	"impossible":      {Kind: "error", Text: "Mit diesen Ausschlüssen ist keine Auslosung möglich. Hebe einen Ausschluss auf oder lade mehr Leute ein."},
-	"too-few":         {Kind: "error", Text: "Für eine Auslosung braucht es mindestens zwei Personen."},
-	"same-person":     {Kind: "error", Text: "Wähle zwei verschiedene Personen."},
-	"too-long":        {Kind: "error", Text: "Der Text ist zu lang (höchstens 5000 Zeichen)."},
-	"closed-already":  {Kind: "error", Text: "Diese Person möchte keine Überraschungen."},
+	"created":              {Kind: "ok", Text: "Die Kampagne ist angelegt. Verschicke jetzt den Einladungslink."},
+	"joined":               {Kind: "ok", Text: "Willkommen! Speichere jetzt deinen persönlichen Link und trag deinen Wunsch ein."},
+	"wish":                 {Kind: "ok", Text: "Dein Wunsch ist gespeichert."},
+	"wish-cleared":         {Kind: "ok", Text: "Dein Wunsch ist gelöscht. Ohne Wunsch bist du nicht bereit zur Auslosung."},
+	"wish-thinking":        {Kind: "ok", Text: "Dein Wunsch ist gespeichert. Du hast noch Bedenkzeit und giltst erst als bereit, wenn du sie ausschaltest."},
+	"open":                 {Kind: "ok", Text: "Andere können jetzt Überraschungen für dich hinterlegen."},
+	"closed":               {Kind: "ok", Text: "Es können keine neuen Überraschungen mehr für dich hinterlegt werden."},
+	"closed-suffices":      {Kind: "ok", Text: "Es können keine neuen Überraschungen mehr für dich hinterlegt werden. Damit wartest du auch nicht mehr auf eine Überraschung – trag einen Wunsch ein, um bereit zu sein."},
+	"suffices":             {Kind: "ok", Text: "Alles klar: Sobald eine Überraschung für dich hinterlegt ist, bist du auch ohne eigenen Wunsch bereit. Die anderen sehen, dass sie dir helfen können."},
+	"suffices-opened":      {Kind: "ok", Text: "Alles klar: Überraschungen für dich sind jetzt eingeschaltet. Sobald eine hinterlegt ist, bist du auch ohne eigenen Wunsch bereit."},
+	"closed-suffices-wish": {Kind: "ok", Text: "Es können keine neuen Überraschungen mehr für dich hinterlegt werden. Dein eingetragener Wunsch zählt jetzt wieder."},
+	"thinking-needs-wish":  {Kind: "error", Text: "Bedenkzeit gibt es nur für einen eingetragenen Wunsch – schreib zuerst etwas hinein."},
+	"wish-back":            {Kind: "ok", Text: "Dein Wunsch zählt wieder."},
+	"suffices-off":         {Kind: "ok", Text: "Alles klar – trag jetzt deinen Wunsch ein, um bereit zu sein."},
+	"surprise":             {Kind: "ok", Text: "Deine Überraschung ist gespeichert."},
+	"surprise-gone":        {Kind: "ok", Text: "Deine Überraschung ist gelöscht."},
+	"removed":              {Kind: "ok", Text: "Die Person wurde entfernt."},
+	"excluded":             {Kind: "ok", Text: "Der Ausschluss ist gespeichert."},
+	"unexcluded":           {Kind: "ok", Text: "Der Ausschluss ist aufgehoben."},
+	"drawn":                {Kind: "ok", Text: "Ausgelost! Alle sehen jetzt über ihren Link, wen sie beschenken."},
+	"drawn-already":        {Kind: "error", Text: "Die Kampagne ist bereits ausgelost, das ist nicht mehr möglich."},
+	"not-ready":            {Kind: "error", Text: "Noch sind nicht alle bereit: Es fehlen Wünsche oder Überraschungen, oder jemand braucht noch Bedenkzeit."},
+	"impossible":           {Kind: "error", Text: "Mit diesen Ausschlüssen ist keine Auslosung möglich. Hebe einen Ausschluss auf oder lade mehr Leute ein."},
+	"too-few":              {Kind: "error", Text: "Für eine Auslosung braucht es mindestens zwei Personen."},
+	"same-person":          {Kind: "error", Text: "Wähle zwei verschiedene Personen."},
+	"too-long":             {Kind: "error", Text: "Der Text ist zu lang (höchstens 5000 Zeichen)."},
+	"closed-already":       {Kind: "error", Text: "Diese Person möchte keine Überraschungen."},
 }
 
 func noticeFrom(r *http.Request) views.Flash { return notices[r.URL.Query().Get("n")] }
@@ -632,6 +635,10 @@ func (s *Server) renderParticipant(w http.ResponseWriter, r *http.Request, me st
 			s.fail(w, r, err)
 			return
 		}
+		if !receiver.HasWish() {
+			// A wish set aside for a surprise must not reach the giver's page.
+			receiver.Wishlist = ""
+		}
 		page.Receiver = &receiver
 		page.ReceiverDeclined = !receiver.SurprisesOpen
 		if page.Surprises, err = s.store.SurprisesForGiver(ctx, c.ID, me.ID); err != nil {
@@ -656,9 +663,9 @@ func (s *Server) saveWish(w http.ResponseWriter, r *http.Request) {
 		// rather than reading as "delete it".
 		text, ok, needsTime = me.Wishlist, true, me.NeedsTime
 	}
-	if !ok && !suffices {
-		// Show the form as submitted, switches included, so nothing the user
-		// chose is lost when they shorten the text.
+	if !ok {
+		// Nothing is saved. Show the typed text again with the editor, so it
+		// is not lost, and let the user shorten it before switching anything.
 		me.Wishlist, me.NeedsTime, me.SurpriseSuffices = text, needsTime, false
 		s.renderParticipant(w, r, me, c, http.StatusUnprocessableEntity, notices["too-long"])
 		return
@@ -672,9 +679,15 @@ func (s *Server) saveWish(w http.ResponseWriter, r *http.Request) {
 		notice = "suffices"
 	case suffices:
 		notice = "" // nothing changed
-	case me.SurpriseSuffices && text == "":
+	case me.SurpriseSuffices && strings.TrimSpace(text) == "":
 		notice = "suffices-off"
-	case text == "":
+	case me.SurpriseSuffices:
+		notice = "wish-back"
+	case strings.TrimSpace(text) == "" && needsTime:
+		notice = "thinking-needs-wish"
+	case strings.TrimSpace(text) == "" && !me.HasWishText():
+		notice = "" // nothing was there, nothing changed
+	case strings.TrimSpace(text) == "":
 		notice = "wish-cleared"
 	case needsTime:
 		notice = "wish-thinking"
@@ -690,6 +703,8 @@ func (s *Server) setSurprisesOpen(w http.ResponseWriter, r *http.Request) {
 	open := checked(r, "open")
 	notice := "open"
 	switch {
+	case !open && me.SurpriseSuffices && me.HasWishText():
+		notice = "closed-suffices-wish"
 	case !open && me.SurpriseSuffices:
 		notice = "closed-suffices"
 	case !open:

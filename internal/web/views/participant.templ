@@ -19,11 +19,16 @@ templ Participant(p ParticipantPage) {
 			@CopyField("my-url", "Dein Link", p.MyURL)
 		</section>
 		if p.Receiver != nil {
+			// After the draw the page is about the person one gives to; one's
+			// own wish and settings fold away at the bottom.
 			@resultCard(p)
+			@Group(p.CampaignPage, participantActions(p))
+			@myOwnDetails(p)
+		} else {
+			@mySurprisesCard(p)
+			@wishCard(p)
+			@Group(p.CampaignPage, participantActions(p))
 		}
-		@mySurprisesCard(p)
-		@wishCard(p)
-		@Group(p.CampaignPage, participantActions(p))
 	}
 }
 
@@ -61,97 +66,95 @@ templ resultCard(p ParticipantPage) {
 templ wishCard(p ParticipantPage) {
 	<section class="card" id="wunsch">
 		<h2>Mein Wunsch</h2>
-		if p.Campaign.Drawn() {
-			if p.Me.HasWish() {
-				<div class="prose box">
-					@templ.Raw(renderMarkdown(p.Me.Wishlist))
-				</div>
-				<p class="muted">Die Auslosung ist erfolgt, dein Wunsch ist damit festgeschrieben.</p>
-			} else if p.Me.SurpriseSuffices {
-				<p class="muted">Dir ist nichts eingefallen – du hast dich auf eine Überraschung gefreut.</p>
-			}
-		} else {
-			<form method="post" action={ templ.URL(participantPath(p.Me.Token, "/wish")) } class="stack">
-				if !p.Me.SurpriseSuffices {
-					@MarkdownEditor("wishlist", "wishlist", "Was wünschst du dir?", p.Me.Wishlist, participantPath(p.Me.Token, "/preview"), "z. B.\n- ein gutes Buch\n- Schokolade")
-					<button class="btn" type="submit">Wunsch speichern</button>
-					<input type="hidden" name="needs_time" value="0"/>
-					<label class="switch switch-think">
-						<input type="checkbox" name="needs_time" value="1" checked?={ p.Me.NeedsTime } role="switch"/>
-						<span class="switch-track" aria-hidden="true"></span>
-						<span>Ich brauche noch Bedenkzeit <span class="muted">– dann gilt mein Wunsch noch nicht als fertig</span></span>
-					</label>
+		<form method="post" action={ templ.URL(participantPath(p.Me.Token, "/wish")) } class="stack">
+			if p.Me.SurpriseSuffices {
+				if p.Me.HasWishText() {
+					<p class="notice">Dein eingetragener Wunsch wird gerade nicht beachtet – dein Wichtel bekommt ihn nicht zu sehen. Schaltest du „Mir fällt nichts ein“ wieder aus, ist er wieder da.</p>
 				}
-				<input type="hidden" name="suffices" value="0"/>
-				<label class="switch">
-					<input
-						type="checkbox"
-						name="suffices"
-						value="1"
-						checked?={ p.Me.SurpriseSuffices }
-						role="switch"
-						data-autosubmit
-						data-confirm-clear="wishlist"
-						data-confirm="Dein bisheriger Wunsch wird dabei gelöscht. Fortfahren?"
-					/>
+			} else {
+				@MarkdownEditor("wishlist", "wishlist", "Was wünschst du dir?", p.Me.Wishlist, participantPath(p.Me.Token, "/preview"), "z. B.\n- ein gutes Buch\n- Schokolade")
+				<button class="btn" type="submit">Wunsch speichern</button>
+				<input type="hidden" name="needs_time" value="0"/>
+				<label class="switch switch-think">
+					<input type="checkbox" name="needs_time" value="1" checked?={ p.Me.NeedsTime } role="switch" data-autosubmit/>
 					<span class="switch-track" aria-hidden="true"></span>
-					<span>Mir fällt nichts ein und ich freue mich über eine Überraschung <span class="muted">– dann brauche ich keinen eigenen Wunsch, sobald mindestens eine Überraschung für mich hinterlegt ist</span></span>
+					<span>Ich brauche noch Bedenkzeit <span class="muted">– dann gilt mein Wunsch noch nicht als fertig</span></span>
 				</label>
-				if !p.Me.SurpriseSuffices && p.Me.HasWish() {
-					<p class="hint js-hide">Schaltest du das ein, wird dein bisheriger Wunsch gelöscht.</p>
-				}
-				<button class="btn btn-secondary btn-small js-hide" type="submit">Übernehmen</button>
-			</form>
-		}
+			}
+			<input type="hidden" name="suffices" value="0"/>
+			<label class="switch">
+				<input type="checkbox" name="suffices" value="1" checked?={ p.Me.SurpriseSuffices } role="switch" data-autosubmit/>
+				<span class="switch-track" aria-hidden="true"></span>
+				<span>Mir fällt nichts ein und ich freue mich über eine Überraschung <span class="muted">– dann zählt kein eigener Wunsch, und ich bin bereit, sobald mindestens eine Überraschung für mich hinterlegt ist</span></span>
+			</label>
+			<button class="btn btn-secondary btn-small js-hide" type="submit">Übernehmen</button>
+		</form>
 	</section>
 }
 
 templ mySurprisesCard(p ParticipantPage) {
 	<section class="card" id="ueberraschungen">
 		<h2>Überraschungen für mich</h2>
-		if !p.Campaign.Drawn() {
-			<p>
-				Andere können für dich eine Überraschungsidee hinterlegen. Du erfährst nur, <em>dass</em> es welche gibt – lesen kann sie nur, wer dich zugelost bekommt.
-			</p>
-		}
+		<p>
+			Andere können für dich eine Überraschungsidee hinterlegen. Du erfährst nur, <em>dass</em> es welche gibt – lesen kann sie nur, wer dich zugelost bekommt.
+		</p>
 		if n := p.MySurpriseCount(); n > 0 {
 			<p class="notice notice-gift">🎁 Für dich { pluralWas(n) } { plural(n, "Überraschung", "Überraschungen") } hinterlegt.</p>
 		} else if h := p.MyHiddenCount(); h > 0 {
-			if p.Campaign.Drawn() {
-				<p class="notice">Für dich { pluralWas(h) } { plural(h, "Überraschung", "Überraschungen") } hinterlegt. Weil du Überraschungen ausgeschaltet hattest, hat dein Wichtel nur deinen Wunsch gesehen.</p>
-			} else {
-				<p class="notice">Für dich { pluralWas(h) } { plural(h, "Überraschung", "Überraschungen") } hinterlegt. Da du keine Überraschungen mehr möchtest, wird deinem Wichtel nach der Auslosung nur dein eingetragener Wunsch angezeigt.</p>
-			}
+			<p class="notice">Für dich { pluralWas(h) } { plural(h, "Überraschung", "Überraschungen") } hinterlegt. Da du keine Überraschungen mehr möchtest, wird deinem Wichtel nach der Auslosung nur dein eingetragener Wunsch angezeigt.</p>
 		}
-		if p.Campaign.Drawn() {
-			if p.Me.SurprisesOpen {
-				<p class="muted">Du warst offen für Überraschungen.</p>
+		<form method="post" action={ templ.URL(participantPath(p.Me.Token, "/surprises")) } class="switch-form" data-autosubmit>
+			<input type="hidden" name="open" value="0"/>
+			<label class="switch">
+				<input type="checkbox" name="open" value="1" checked?={ p.Me.SurprisesOpen } role="switch"/>
+				<span class="switch-track" aria-hidden="true"></span>
+				<span>Andere dürfen Überraschungen für mich hinterlegen</span>
+			</label>
+			<button class="btn btn-secondary btn-small js-hide" type="submit">Speichern</button>
+		</form>
+		if p.Me.SurprisesOpen {
+			<p class="hint" id="surprises-explained">Dein Wichtel sieht nach der Auslosung deinen Wunsch <em>und</em> alle Überraschungsideen der anderen für dich. Soll nur dein Wunsch zählen, schalte Überraschungen aus.</p>
+		} else if p.MyHiddenCount() == 0 {
+			// With hidden ideas the notice above already says this.
+			<p class="hint" id="surprises-explained">Dein Wichtel sieht nach der Auslosung nur deinen Wunsch.</p>
+		}
+		if p.MyHiddenCount() > 0 {
+			<p class="hint">Schaltest du Überraschungen vor der Auslosung wieder ein, sind die gespeicherten Ideen wieder dabei.</p>
+		} else if p.Me.SurprisesOpen && p.Me.SurpriseSuffices {
+			if p.Me.HasWishText() {
+				<p class="hint">Dir fällt nichts ein, du freust dich auf eine Überraschung. Schaltest du Überraschungen aus, zählt wieder dein eingetragener Wunsch.</p>
 			} else {
-				<p class="muted">Du wolltest keine Überraschungen.</p>
-			}
-		} else {
-			<form method="post" action={ templ.URL(participantPath(p.Me.Token, "/surprises")) } class="switch-form" data-autosubmit>
-				<input type="hidden" name="open" value="0"/>
-				<label class="switch">
-					<input type="checkbox" name="open" value="1" checked?={ p.Me.SurprisesOpen } role="switch"/>
-					<span class="switch-track" aria-hidden="true"></span>
-					<span>Andere dürfen Überraschungen für mich hinterlegen</span>
-				</label>
-				<button class="btn btn-secondary btn-small js-hide" type="submit">Speichern</button>
-			</form>
-			if p.Me.SurprisesOpen {
-				<p class="hint" id="surprises-explained">Dein Wichtel sieht nach der Auslosung deinen Wunsch <em>und</em> alle Überraschungsideen der anderen für dich. Soll nur dein Wunsch zählen, schalte Überraschungen aus.</p>
-			} else if p.MyHiddenCount() == 0 {
-				// With hidden ideas the notice above already says this.
-				<p class="hint" id="surprises-explained">Dein Wichtel sieht nach der Auslosung nur deinen Wunsch.</p>
-			}
-			if p.MyHiddenCount() > 0 {
-				<p class="hint">Schaltest du Überraschungen vor der Auslosung wieder ein, sind die gespeicherten Ideen wieder dabei.</p>
-			} else if p.Me.SurprisesOpen && p.Me.SurpriseSuffices {
 				<p class="hint">Dir fällt nichts ein, du freust dich auf eine Überraschung. Schaltest du Überraschungen aus, brauchst du wieder einen eigenen Wunsch.</p>
 			}
 		}
 	</section>
+}
+
+// myOwnDetails is the participant's own side after the draw, folded away at
+// the bottom so the page is about the person they give to.
+templ myOwnDetails(p ParticipantPage) {
+	<details class="card card-mine" id="mein-wunsch">
+		<summary>Mein Wunsch</summary>
+		if p.Me.HasWish() {
+			<div class="prose box">
+				@templ.Raw(renderMarkdown(p.Me.Wishlist))
+			</div>
+		} else if p.Me.SurpriseSuffices {
+			<p>Dir ist nichts eingefallen – du hast dich auf eine Überraschung gefreut.</p>
+		}
+		if n := p.MySurpriseCount(); n > 0 {
+			if p.Me.HasWish() {
+				<p class="muted">Für dich { pluralWas(n) } { plural(n, "Überraschung", "Überraschungen") } hinterlegt – dein Wichtel sieht sie zusätzlich zu deinem Wunsch.</p>
+			} else {
+				<p class="muted">Für dich { pluralWas(n) } { plural(n, "Überraschung", "Überraschungen") } hinterlegt – die sieht dein Wichtel.</p>
+			}
+		} else if h := p.MyHiddenCount(); h > 0 {
+			<p class="muted">Für dich { pluralWas(h) } { plural(h, "Überraschung", "Überraschungen") } hinterlegt. Weil du Überraschungen ausgeschaltet hattest, hat dein Wichtel nur deinen Wunsch gesehen.</p>
+		} else if !p.Me.SurprisesOpen {
+			<p class="muted">Du wolltest keine Überraschungen.</p>
+		}
+		<p class="muted">Seit der Auslosung lässt sich hier nichts mehr ändern.</p>
+	</details>
 }
 
 func participantActions(p ParticipantPage) func(Member) templ.Component {
