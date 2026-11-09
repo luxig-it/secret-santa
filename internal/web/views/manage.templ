@@ -3,7 +3,7 @@ package views
 import "fmt"
 
 templ Manage(p ManagePage) {
-	@Layout(p.Campaign.Title) {
+	@CampaignLayout(p.Campaign.Title, p.Campaign.Title) {
 		@CampaignHead(p.Campaign)
 		@FlashBox(p.Flash)
 		<section class="card">

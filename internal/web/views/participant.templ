@@ -1,7 +1,7 @@
 package views
 
 templ Participant(p ParticipantPage) {
-	@Layout(p.Campaign.Title) {
+	@CampaignLayout(p.Campaign.Title, p.Campaign.Title) {
 		@CampaignHead(p.Campaign)
 		@FlashBox(p.Flash)
 		for _, m := range p.HelpWanted() {
@@ -179,7 +179,7 @@ func pluralWas(n int) string {
 }
 
 templ SurpriseEdit(p SurprisePage) {
-	@Layout("Überraschung für " + p.Recipient.Name) {
+	@CampaignLayout("Überraschung für "+p.Recipient.Name, p.Campaign.Title) {
 		<p><a href={ templ.URL(participantPath(p.Me.Token, "")) }>← Zurück zur Übersicht</a></p>
 		<section class="card">
 			<h1>Überraschung für { p.Recipient.Name }</h1>

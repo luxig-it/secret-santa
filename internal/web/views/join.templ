@@ -1,7 +1,7 @@
 package views
 
 templ Join(p JoinPage) {
-	@Layout(p.Campaign.Title) {
+	@CampaignLayout(p.Campaign.Title, p.Campaign.Title) {
 		@CampaignHead(p.Campaign)
 		@FlashBox(p.Flash)
 		if p.Campaign.Drawn() {

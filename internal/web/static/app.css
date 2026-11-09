@@ -354,6 +354,13 @@ header.site::after {
   background: repeating-linear-gradient(-45deg, #c8102e 0 9px, #fdf8ec 9px 18px);
 }
 header.site .brand { color: var(--pine-ink); letter-spacing: .02em; }
+header.site .brand-campaign {
+  display: block;
+  font-family: Georgia, "Iowan Old Style", "Palatino Linotype", "Times New Roman", serif;
+  font-size: 1.5rem; font-weight: 600; line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+.campaign-head { padding-top: 8px; }
 header.site .brand::after { content: " ✦"; color: #e8c46a; }
 
 /* Headings in a warm serif. */
