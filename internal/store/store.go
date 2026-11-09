@@ -180,6 +180,15 @@ var addedColumns = []struct{ table, column, definition string }{
 
 // migrate runs in one transaction, which takes the write lock up front, so
 // two processes opening an old database at once cannot both add a column.
+// dataFixes bring rows written under older rules in line with the current
+// invariants. Each must be safe to run on every start.
+var dataFixes = []string{
+	// Hoping for a surprise used to be possible next to a wish; now it
+	// replaces the wish. Keep the wish, which is what the giver would see.
+	`UPDATE participant SET surprise_suffices = 0
+	 WHERE surprise_suffices = 1 AND trim(wishlist) <> ''`,
+}
+
 func migrate(db *sql.DB) error {
 	tx, err := db.Begin()
 	if err != nil {
@@ -197,6 +206,11 @@ func migrate(db *sql.DB) error {
 		}
 		if _, err := tx.Exec(`ALTER TABLE ` + c.table + ` ADD COLUMN ` + c.column + ` ` + c.definition); err != nil {
 			return fmt.Errorf("add %s.%s: %w", c.table, c.column, err)
+		}
+	}
+	for _, q := range dataFixes {
+		if _, err := tx.Exec(q); err != nil {
+			return fmt.Errorf("data fix: %w", err)
 		}
 	}
 	return tx.Commit()
@@ -420,26 +434,38 @@ func participants(ctx context.Context, q querier, campaignID int64) ([]Participa
 }
 
 // SetWish replaces somebody's wish text and records whether they still want
-// time to think it over. Wishes are final once the campaign is drawn, so the
-// giver's view cannot change under them.
-func (s *Store) SetWish(ctx context.Context, campaignID, participantID int64, text string, needsTime bool) error {
+// time to think it over, or whether nothing comes to mind and they hope for a
+// surprise instead ("suffices"). Hoping for a surprise replaces the wish: it
+// clears the text and the time to think, and it allows surprises. Wishes are
+// final once the campaign is drawn, so the giver's view cannot change under
+// them.
+func (s *Store) SetWish(ctx context.Context, campaignID, participantID int64, text string, needsTime, suffices bool) error {
+	if suffices {
+		text = ""
+	}
+	if strings.TrimSpace(text) == "" {
+		// Time to think about no wish means nothing; dropping it keeps the
+		// promise that entering a wish makes one ready.
+		needsTime = false
+	}
 	return s.updateWhileOpen(ctx, campaignID,
-		`UPDATE participant SET wishlist = ?, needs_time = ? WHERE id = ? AND campaign_id = ?`,
-		text, needsTime, participantID, campaignID)
+		`UPDATE participant
+		 SET wishlist = ?, needs_time = ?, surprise_suffices = ?,
+		     surprises_open = (surprises_open OR ?)
+		 WHERE id = ? AND campaign_id = ?`,
+		text, needsTime, suffices, suffices, participantID, campaignID)
 }
 
-// SetSurprisePrefs records whether others may leave surprise ideas for this
-// participant and whether one such idea is enough to make them ready without
-// a wish. Ideas already left stay stored either way; while surprises are
-// closed nobody can add new ones and the giver is not shown the existing
-// ones (see SurprisesForGiver). A surprise cannot suffice for somebody who
-// accepts none, so closing also clears "suffices". Neither can change after
-// the draw.
-func (s *Store) SetSurprisePrefs(ctx context.Context, campaignID, participantID int64, open, suffices bool) error {
+// SetSurprisesOpen records whether others may leave surprise ideas for this
+// participant. Ideas already left stay stored either way; while surprises are
+// closed nobody can add new ones and the giver is not shown the existing ones
+// (see SurprisesForGiver). Somebody who accepts no surprises cannot hope for
+// one, so closing also ends "suffices". Neither can change after the draw.
+func (s *Store) SetSurprisesOpen(ctx context.Context, campaignID, participantID int64, open bool) error {
 	return s.updateWhileOpen(ctx, campaignID,
-		`UPDATE participant SET surprises_open = ?, surprise_suffices = ?
+		`UPDATE participant SET surprises_open = ?, surprise_suffices = (surprise_suffices AND ?)
 		 WHERE id = ? AND campaign_id = ?`,
-		open, open && suffices, participantID, campaignID)
+		open, open, participantID, campaignID)
 }
 
 // DeleteParticipant removes somebody from a campaign that is still open. The

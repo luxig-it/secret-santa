@@ -27,7 +27,8 @@ The interface is German.
    switched on *Bedenkzeit* ("time to think") while saving it. Somebody who
    switched on *Mir fällt nichts ein und ich freue mich über eine Überraschung*
    is also ready without a wish as soon as at least one surprise idea was left
-   for them. That switch turns surprises on, highlights them in the group, and
+   for them. That switch sits below the wish editor and replaces it: it clears
+   the wish (asking first), turns surprises on, highlights them in the group, and
    shows everybody else a friendly banner asking for an idea until the first
    one has been left. When everybody
    is ready the organizer draws. The result is a single cycle (nobody draws

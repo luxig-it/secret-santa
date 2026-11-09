@@ -70,12 +70,20 @@
     if (msg && !confirm(msg)) ev.preventDefault();
   });
 
-  // Switches save as soon as they change. The form says which one changed,
-  // so the server need not guess from a page that may be out of date.
+  // Switches save as soon as they change: every control of a form marked
+  // data-autosubmit, or a single control marked so inside another form.
   for (const form of document.querySelectorAll("form[data-autosubmit]")) {
-    form.addEventListener("change", (ev) => {
-      if (form.elements.changed) form.elements.changed.value = ev.target.name;
-      form.requestSubmit();
+    form.addEventListener("change", () => form.requestSubmit());
+  }
+  for (const input of document.querySelectorAll("input[data-autosubmit]")) {
+    input.addEventListener("change", () => {
+      // Switching on may throw away text; ask first if there is any.
+      const field = input.dataset.confirmClear && document.getElementById(input.dataset.confirmClear);
+      if (input.checked && field && field.value.trim() && !confirm(input.dataset.confirm)) {
+        input.checked = false;
+        return;
+      }
+      input.form.requestSubmit();
     });
   }
 

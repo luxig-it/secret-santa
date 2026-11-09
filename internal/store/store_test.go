@@ -84,7 +84,7 @@ func TestDrawNeedsEveryWish(t *testing.T) {
 		t.Fatal("campaign flagged as drawn after a refused draw")
 	}
 
-	if err := s.SetWish(ctx, c.ID, carl.ID, "tea", false); err != nil {
+	if err := s.SetWish(ctx, c.ID, carl.ID, "tea", false, false); err != nil {
 		t.Fatal(err)
 	}
 	if err := s.Draw(ctx, c.ID); err != nil {
@@ -110,7 +110,7 @@ func TestDrawNeedsEveryWish(t *testing.T) {
 	if _, err := s.AddParticipant(ctx, c.ID, "Dora", "", ""); !errors.Is(err, ErrAlreadyDrawn) {
 		t.Fatalf("late join: got %v, want ErrAlreadyDrawn", err)
 	}
-	if err := s.SetSurprisePrefs(ctx, c.ID, carl.ID, false, false); !errors.Is(err, ErrAlreadyDrawn) {
+	if err := s.SetSurprisesOpen(ctx, c.ID, carl.ID, false); !errors.Is(err, ErrAlreadyDrawn) {
 		t.Fatalf("switch after draw: got %v, want ErrAlreadyDrawn", err)
 	}
 }
@@ -175,7 +175,7 @@ func TestSurpriseRules(t *testing.T) {
 	}
 
 	// Closing the switch blocks new ideas but keeps existing ones editable.
-	if err := s.SetSurprisePrefs(ctx, c.ID, ben.ID, false, false); err != nil {
+	if err := s.SetSurprisesOpen(ctx, c.ID, ben.ID, false); err != nil {
 		t.Fatal(err)
 	}
 	if err := s.SaveSurprise(ctx, c.ID, anna.ID, ben.ID, "a blue scarf"); err != nil {
@@ -184,7 +184,7 @@ func TestSurpriseRules(t *testing.T) {
 	if err := s.SaveSurprise(ctx, c.ID, anna.ID, carl.ID, "x"); err != nil {
 		t.Fatal(err) // Carl is still open.
 	}
-	if err := s.SetSurprisePrefs(ctx, c.ID, carl.ID, false, false); err != nil {
+	if err := s.SetSurprisesOpen(ctx, c.ID, carl.ID, false); err != nil {
 		t.Fatal(err)
 	}
 	if err := s.SaveSurprise(ctx, c.ID, ben.ID, carl.ID, "new"); !errors.Is(err, ErrSurprisesClosed) {
@@ -240,7 +240,7 @@ func TestSurprisesFrozenAfterDraw(t *testing.T) {
 	if err := s.SaveSurprise(ctx, c.ID, a.ID, b.ID, "late"); !errors.Is(err, ErrAlreadyDrawn) {
 		t.Fatalf("surprise after draw: got %v", err)
 	}
-	if err := s.SetWish(ctx, c.ID, a.ID, "", false); !errors.Is(err, ErrAlreadyDrawn) {
+	if err := s.SetWish(ctx, c.ID, a.ID, "", false, false); !errors.Is(err, ErrAlreadyDrawn) {
 		t.Fatalf("wish after draw: got %v", err)
 	}
 	if err := s.AddExclusion(ctx, c.ID, a.ID, b.ID); !errors.Is(err, ErrAlreadyDrawn) {
@@ -257,10 +257,10 @@ func TestUpdatesStayInsideTheirCampaign(t *testing.T) {
 	c := mustCampaign(t, s)
 	other := mustCampaign(t, s)
 	p := mustJoin(t, s, other, "Anna", "")
-	if err := s.SetWish(ctx, c.ID, p.ID, "x", false); !errors.Is(err, ErrNotFound) {
+	if err := s.SetWish(ctx, c.ID, p.ID, "x", false, false); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("wish: got %v", err)
 	}
-	if err := s.SetSurprisePrefs(ctx, c.ID, p.ID, false, false); !errors.Is(err, ErrNotFound) {
+	if err := s.SetSurprisesOpen(ctx, c.ID, p.ID, false); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("switch: got %v", err)
 	}
 	if err := s.DeleteParticipant(ctx, c.ID, p.ID); !errors.Is(err, ErrNotFound) {
@@ -292,7 +292,7 @@ func TestNeedsTimeBlocksDraw(t *testing.T) {
 	mustJoin(t, s, c, "Anna", "x")
 	ben := mustJoin(t, s, c, "Ben", "")
 
-	if err := s.SetWish(ctx, c.ID, ben.ID, "book", true); err != nil {
+	if err := s.SetWish(ctx, c.ID, ben.ID, "book", true, false); err != nil {
 		t.Fatal(err)
 	}
 	got, _ := s.ParticipantByToken(ctx, ben.Token)
@@ -302,7 +302,7 @@ func TestNeedsTimeBlocksDraw(t *testing.T) {
 	if err := s.Draw(ctx, c.ID); !errors.Is(err, ErrNotReady) {
 		t.Fatalf("draw while Ben thinks: got %v", err)
 	}
-	if err := s.SetWish(ctx, c.ID, ben.ID, "book", false); err != nil {
+	if err := s.SetWish(ctx, c.ID, ben.ID, "book", false, false); err != nil {
 		t.Fatal(err)
 	}
 	if err := s.Draw(ctx, c.ID); err != nil {
@@ -363,7 +363,7 @@ func TestSurpriseInsteadOfWish(t *testing.T) {
 	anna := mustJoin(t, s, c, "Anna", "x")
 	ben := mustJoin(t, s, c, "Ben", "")
 
-	if err := s.SetSurprisePrefs(ctx, c.ID, ben.ID, true, true); err != nil {
+	if err := s.SetWish(ctx, c.ID, ben.ID, "", false, true); err != nil {
 		t.Fatal(err)
 	}
 	if err := s.Draw(ctx, c.ID); !errors.Is(err, ErrNotReady) {
@@ -382,7 +382,10 @@ func TestClosingSurprisesClearsSuffices(t *testing.T) {
 	s := open(t)
 	c := mustCampaign(t, s)
 	ben := mustJoin(t, s, c, "Ben", "")
-	if err := s.SetSurprisePrefs(ctx, c.ID, ben.ID, false, true); err != nil {
+	if err := s.SetWish(ctx, c.ID, ben.ID, "", false, true); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SetSurprisesOpen(ctx, c.ID, ben.ID, false); err != nil {
 		t.Fatal(err)
 	}
 	got, _ := s.ParticipantByToken(ctx, ben.Token)
@@ -401,11 +404,11 @@ func TestClosedSurprisesAreHiddenFromTheGiver(t *testing.T) {
 		if err := s.SaveSurprise(ctx, c.ID, anna.ID, ben.ID, "idea"); err != nil {
 			t.Fatal(err)
 		}
-		if err := s.SetSurprisePrefs(ctx, c.ID, ben.ID, false, false); err != nil {
+		if err := s.SetSurprisesOpen(ctx, c.ID, ben.ID, false); err != nil {
 			t.Fatal(err)
 		}
 		if reopen {
-			if err := s.SetSurprisePrefs(ctx, c.ID, ben.ID, true, false); err != nil {
+			if err := s.SetSurprisesOpen(ctx, c.ID, ben.ID, true); err != nil {
 				t.Fatal(err)
 			}
 		}
@@ -425,5 +428,50 @@ func TestClosedSurprisesAreHiddenFromTheGiver(t *testing.T) {
 		if want := map[bool]int{false: 0, true: 1}[reopen]; len(got) != want {
 			t.Fatalf("reopen=%v: giver sees %d ideas, want %d", reopen, len(got), want)
 		}
+	}
+}
+
+func TestHopingForASurpriseReplacesTheWish(t *testing.T) {
+	ctx := context.Background()
+	s := open(t)
+	c := mustCampaign(t, s)
+	ben := mustJoin(t, s, c, "Ben", "")
+	if err := s.SetSurprisesOpen(ctx, c.ID, ben.ID, false); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SetWish(ctx, c.ID, ben.ID, "old wish", true, true); err != nil {
+		t.Fatal(err)
+	}
+	got, _ := s.ParticipantByToken(ctx, ben.Token)
+	if got.HasWish() || got.NeedsTime || !got.SurpriseSuffices || !got.SurprisesOpen {
+		t.Fatalf("wish=%q needsTime=%v suffices=%v open=%v, want empty, false, true, true",
+			got.Wishlist, got.NeedsTime, got.SurpriseSuffices, got.SurprisesOpen)
+	}
+	// Turning it off again keeps surprises open.
+	if err := s.SetWish(ctx, c.ID, ben.ID, "new wish", false, false); err != nil {
+		t.Fatal(err)
+	}
+	got, _ = s.ParticipantByToken(ctx, ben.Token)
+	if got.Wishlist != "new wish" || got.SurpriseSuffices || !got.SurprisesOpen {
+		t.Fatalf("after turning off: %+v", got)
+	}
+}
+
+func TestDataFixDropsSufficesNextToAWish(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "legacy.db")
+	s := openAt(t, path)
+	c := mustCampaign(t, s)
+	ben := mustJoin(t, s, c, "Ben", "")
+	// A row as the previous rules allowed it: a wish and the hope for a
+	// surprise at the same time.
+	if _, err := s.db.Exec(`UPDATE participant SET wishlist = 'tea', surprise_suffices = 1 WHERE id = ?`, ben.ID); err != nil {
+		t.Fatal(err)
+	}
+	s.Close()
+
+	s = openAt(t, path)
+	got, _ := s.ParticipantByToken(context.Background(), ben.Token)
+	if got.Wishlist != "tea" || got.SurpriseSuffices {
+		t.Fatalf("wish=%q suffices=%v, want the wish kept and suffices off", got.Wishlist, got.SurpriseSuffices)
 	}
 }
