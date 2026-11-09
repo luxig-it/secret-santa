@@ -42,3 +42,7 @@ rules; they are the spec.
   link to an address the person typed in, never stores the address, is
   rate-limited per link and per IP, and never logs in without STARTTLS.
   Handlers get a `mail.Sender`, nil when off; tests use a fake.
+- Releases: pushing a `v*` tag runs `.github/workflows/release.yml`, which
+  tests, builds and attests the image. Deploying is manual on the server
+  (`deploy/README.md`); no workflow may get access to the server. Actions
+  are pinned to commit SHAs and base images to digests.

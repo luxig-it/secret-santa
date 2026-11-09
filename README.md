@@ -59,9 +59,15 @@ make image   # production container
 With the devcontainer, `.env` is written on first start and the organizer key
 is `dev-organizer-token`.
 
+Releases are published as `ghcr.io/luxig-it/secret-santa:<version>` when a
+`v*` tag is pushed. [`deploy/README.md`](deploy/README.md) covers running it
+on a server behind Plesk, the GitHub settings that keep releases in your
+hands, updates and backups. A quick local try of the container:
+
 ```sh
+make image
 docker run -p 8080:8080 -v secret-santa:/data \
-  -e SECRET_SANTA_BASE_URL=https://wichteln.example.com \
+  -e SECRET_SANTA_BASE_URL=http://localhost:8080 \
   -e SECRET_SANTA_ORGANIZER_TOKENS=carsten:a-long-secret \
   ghcr.io/luxig-it/secret-santa:dev
 ```

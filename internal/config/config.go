@@ -6,6 +6,7 @@ package config
 import (
 	"fmt"
 	"net/mail"
+	"net/netip"
 	"os"
 	"strings"
 
@@ -59,6 +60,10 @@ type Config struct {
 	SMTP       SMTP
 	// SMTPInsecure allows sending without STARTTLS, for a local relay.
 	SMTPInsecure bool
+	// TrustedProxies are the addresses of reverse proxies whose X-Real-IP
+	// header names the actual client. Requests from anywhere else are taken
+	// at their connection address, so nobody can fake their IP.
+	TrustedProxies []netip.Prefix
 	// AllowEmail offers sending personal and management links by mail.
 	// It requires a complete SMTP configuration.
 	AllowEmail bool
@@ -97,6 +102,20 @@ func Load() (Config, error) {
 	if err != nil {
 		return Config{}, err
 	}
+	if strings.HasPrefix(c.BaseURL, "https://") {
+		// A public instance must not run with a key printed in this
+		// repository's examples.
+		for _, o := range orgs {
+			if isPublicExampleToken(o.Token) {
+				return Config{}, fmt.Errorf("organizer %q still uses the example key %q; set a long random key (e.g. openssl rand -base64 24)", o.Label, o.Token)
+			}
+		}
+	}
+	proxies, err := ParseProxies(env("SECRET_SANTA_TRUSTED_PROXY", ""))
+	if err != nil {
+		return Config{}, fmt.Errorf("SECRET_SANTA_TRUSTED_PROXY: %w", err)
+	}
+	c.TrustedProxies = proxies
 	if len(orgs) == 0 {
 		// Running with no configuration at all should still work, otherwise
 		// nobody ever gets as far as trying the app out.
@@ -197,4 +216,41 @@ func parseBool(v string) (bool, error) {
 		return false, nil
 	}
 	return false, fmt.Errorf("%q is not a yes/no value", v)
+}
+
+// publicExampleTokens appear in this repository's examples and docs, so
+// anybody knows them.
+var publicExampleTokens = []string{
+	"change-me", "change-me-too", "dev-organizer-token", "a-long-secret",
+	"REPLACE-WITH-A-LONG-RANDOM-KEY",
+}
+
+func isPublicExampleToken(t string) bool {
+	for _, p := range publicExampleTokens {
+		if strings.EqualFold(t, p) {
+			return true
+		}
+	}
+	return strings.Contains(strings.ToUpper(t), "REPLACE")
+}
+
+// ParseProxies reads a comma separated list of IP addresses and CIDR ranges.
+func ParseProxies(raw string) ([]netip.Prefix, error) {
+	var out []netip.Prefix
+	for _, part := range strings.Split(raw, ",") {
+		part = strings.TrimSpace(part)
+		if part == "" {
+			continue
+		}
+		if p, err := netip.ParsePrefix(part); err == nil {
+			out = append(out, p.Masked())
+			continue
+		}
+		a, err := netip.ParseAddr(part)
+		if err != nil {
+			return nil, fmt.Errorf("%q is neither an IP address nor a CIDR range", part)
+		}
+		out = append(out, netip.PrefixFrom(a.Unmap(), a.Unmap().BitLen()))
+	}
+	return out, nil
 }

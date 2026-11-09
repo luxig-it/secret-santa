@@ -3,6 +3,8 @@ package web
 import (
 	"net"
 	"net/http"
+	"net/netip"
+	"strings"
 	"sync"
 	"time"
 )
@@ -86,13 +88,27 @@ func (l *limiter) current(key string) *window {
 	return w
 }
 
-// clientIP is the address the request came from. Forwarding headers are
-// ignored on purpose: without a trusted proxy configuration they are set
-// by the client and would let anybody pick a fresh identity per request.
-func clientIP(r *http.Request) string {
+// clientIP is the address the request came from. Behind a trusted reverse
+// proxy that is the X-Real-IP header the proxy sets; from anywhere else the
+// header is ignored, since a client could otherwise pick a fresh identity
+// per request and dodge every limit.
+func (s *Server) clientIP(r *http.Request) string {
 	host, _, err := net.SplitHostPort(r.RemoteAddr)
 	if err != nil {
-		return r.RemoteAddr
+		host = r.RemoteAddr
 	}
-	return host
+	remote, err := netip.ParseAddr(host)
+	if err != nil {
+		return host
+	}
+	remote = remote.Unmap()
+	for _, p := range s.cfg.TrustedProxies {
+		if p.Contains(remote) {
+			if real, err := netip.ParseAddr(strings.TrimSpace(r.Header.Get("X-Real-IP"))); err == nil {
+				return real.Unmap().String()
+			}
+			break
+		}
+	}
+	return remote.String()
 }

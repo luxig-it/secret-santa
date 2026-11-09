@@ -1,0 +1,51 @@
+# Tests every push to main and every pull request, including those from
+# forks. It has no secrets and read-only access, so nothing a pull request
+# changes here can reach the registry or the server. The release workflow
+# runs the same checks by calling this one.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_call:
+    inputs:
+      cache:
+        description: Use the Go module cache.
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          # Releases pass false: built from a clean download, not from a
+          # cache other runs could have written.
+          cache: ${{ inputs.cache != false }}
+      - run: go tool templ generate
+      - run: go vet ./...
+      - run: go test -race ./...
+
+  # Builds the image without pushing, so a broken base image update from
+  # Dependabot fails here rather than at the next release tag.
+  image:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          platforms: linux/amd64
+          push: false

@@ -11,6 +11,7 @@ import (
 	_ "embed"
 	"errors"
 	"fmt"
+	"io"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -823,4 +824,26 @@ func scanSurprises(rows *sql.Rows) ([]Surprise, error) {
 		out = append(out, x)
 	}
 	return out, rows.Err()
+}
+
+// Backup writes a consistent copy of the whole database to w while the app
+// keeps running. VACUUM INTO produces a compact standalone file that
+// includes everything still in the write-ahead log.
+func (s *Store) Backup(ctx context.Context, w io.Writer) error {
+	dir, err := os.MkdirTemp("", "secret-santa-backup-")
+	if err != nil {
+		return err
+	}
+	defer os.RemoveAll(dir)
+	path := filepath.Join(dir, "backup.db")
+	if _, err := s.db.ExecContext(ctx, `VACUUM INTO ?`, path); err != nil {
+		return fmt.Errorf("vacuum into: %w", err)
+	}
+	f, err := os.Open(path)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	_, err = io.Copy(w, f)
+	return err
 }
