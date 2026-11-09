@@ -305,16 +305,6 @@ input:focus, select:focus, textarea:focus, button:focus-visible, a:focus-visible
   }
 }
 
-/* Faint snowflakes in the background. */
-body {
-  background-color: var(--bg);
-  background-image:
-    radial-gradient(circle at 20% 30%, var(--snow) 0 2px, transparent 3px),
-    radial-gradient(circle at 70% 80%, var(--snow) 0 1.5px, transparent 2.5px),
-    radial-gradient(circle at 45% 60%, var(--snow) 0 1px, transparent 2px);
-  background-size: 140px 140px, 90px 90px, 60px 60px;
-}
-
 /* Gentle snowfall on top of the pattern, behind everything else. */
 body::before {
   content: "";
@@ -388,3 +378,58 @@ h1, h2, .card-mine > summary {
 
 footer.site::before { content: "❄ "; color: var(--muted); }
 footer.site::after { content: " ❄"; color: var(--muted); }
+
+/* --- Photo background --------------------------------------------------------
+   Gifts on dark wood, fixed behind everything. A fixed layer instead of
+   background-attachment: fixed, which mobile Safari ignores and would then
+   stretch the photo over the whole page height. The wood in the middle
+   stays dark behind the cards; a light veil in light mode and a darker one
+   at night keep the edges from competing with the content. */
+html { background: #2a1d15; }
+body { background: transparent; }
+body::after {
+  content: "";
+  position: fixed; inset: 0; z-index: -1;
+  background:
+    linear-gradient(rgba(20, 12, 8, .18), rgba(20, 12, 8, .18)),
+    url("bg-gifts-1920.jpg") center / cover no-repeat;
+}
+@media (max-width: 800px) {
+  body::after {
+    background:
+      linear-gradient(rgba(20, 12, 8, .30), rgba(20, 12, 8, .30)),
+      url("bg-gifts-1200.jpg") center / cover no-repeat;
+  }
+}
+@media (prefers-color-scheme: dark) {
+  body::after {
+    background:
+      linear-gradient(rgba(5, 12, 9, .55), rgba(5, 12, 9, .55)),
+      url("bg-gifts-1920.jpg") center / cover no-repeat;
+  }
+}
+@media (prefers-color-scheme: dark) and (max-width: 800px) {
+  body::after {
+    background:
+      linear-gradient(rgba(5, 12, 9, .62), rgba(5, 12, 9, .62)),
+      url("bg-gifts-1200.jpg") center / cover no-repeat;
+  }
+}
+
+/* Snow stays, a touch brighter so it shows on wood. */
+:root { --snow: rgba(255, 255, 255, .22); }
+@media (prefers-color-scheme: dark) { :root { --snow: rgba(255, 255, 255, .14); } }
+
+/* Text that sits right on the photo is light with a soft shadow. */
+.campaign-head, .hero, .toolbar, main > p, footer.site {
+  color: #f8f1e4;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, .65);
+}
+.campaign-head .facts dt, .toolbar .muted, .hero p { color: #e9dcc6; }
+.hero h1, .campaign-head h1 { color: #fff8ec; }
+main > p > a, .toolbar .btn-link { color: #ffd98a; }
+.campaign-head .pill, .toolbar .btn { text-shadow: none; }
+footer.site::before, footer.site::after { color: #e9dcc6; }
+
+/* Cards read as paper laid on the table. */
+.card { box-shadow: 0 6px 24px rgba(0, 0, 0, .28); }

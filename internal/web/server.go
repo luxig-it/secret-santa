@@ -38,7 +38,26 @@ var static = func() fs.FS {
 	return sub
 }()
 
-func init() { views.AssetVersion = hashFiles(static) }
+// etags holds a content hash per static file. Files referenced from CSS,
+// like the background image, carry no version in their URL, so browsers
+// revalidate them; the ETag turns that into a cheap 304.
+var etags = map[string]string{}
+
+func init() {
+	views.AssetVersion = hashFiles(static)
+	_ = fs.WalkDir(static, ".", func(path string, d fs.DirEntry, err error) error {
+		if err != nil || d.IsDir() {
+			return err
+		}
+		b, err := fs.ReadFile(static, path)
+		if err != nil {
+			return err
+		}
+		sum := sha256.Sum256(b)
+		etags[path] = `"` + hex.EncodeToString(sum[:8]) + `"`
+		return nil
+	})
+}
 
 // Input limits. They keep the database small and the pages readable; the
 // templates set the same maxlength so honest users never hit them.
@@ -168,6 +187,7 @@ func (s *Server) static(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
+	w.Header().Set("ETag", etags[name])
 	if r.URL.Query().Get("v") == views.AssetVersion {
 		w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
 	} else {
