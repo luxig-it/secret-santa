@@ -90,6 +90,13 @@ footer.site { color: var(--muted); font-size: .85rem; text-align: center; }
 .flash { border-radius: 8px; padding: 12px 14px; margin: 16px 0; font-weight: 500; }
 .flash-ok { background: var(--green-soft); color: var(--green); }
 .flash-error { background: var(--accent-soft); color: var(--danger); }
+.flash-toast {
+  position: fixed; z-index: 10; top: 12px; left: 50%; transform: translateX(-50%);
+  width: min(560px, calc(100% - 32px)); margin: 0;
+  box-shadow: 0 4px 20px rgba(0,0,0,.18); cursor: pointer;
+  transition: opacity .3s, transform .3s;
+}
+.flash-toast-gone { opacity: 0; transform: translate(-50%, -12px); pointer-events: none; }
 
 label { font-weight: 600; display: block; margin-bottom: 4px; }
 input[type=text], input[type=password], input[type=date], input:not([type]), select, textarea {
