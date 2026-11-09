@@ -34,9 +34,9 @@ var ErrNotFound = errors.New("not found")
 // ErrAlreadyDrawn guards the operations that only make sense before the draw.
 var ErrAlreadyDrawn = errors.New("this campaign has already been drawn")
 
-// ErrNotReady means at least one participant has not entered a wish yet or
-// still wants time to think it over, so the organizer cannot draw.
-var ErrNotReady = errors.New("not every participant is ready: a wish is missing or still being thought over")
+// ErrNotReady means at least one participant is not ready (see ReadyWith),
+// so the organizer cannot draw.
+var ErrNotReady = errors.New("not every participant is ready for the draw")
 
 // ErrNameTaken means somebody with the same name already joined, which would
 // make the group list ambiguous.
@@ -80,16 +80,25 @@ type Participant struct {
 	Wishlist      string
 	SurprisesOpen bool
 	NeedsTime     bool
-	Token         string
-	CreatedAt     time.Time
+	// SurpriseSuffices: one surprise idea left for them replaces a wish.
+	SurpriseSuffices bool
+	Token            string
+	CreatedAt        time.Time
 }
 
 // HasWish reports whether a wish has been entered.
 func (p Participant) HasWish() bool { return strings.TrimSpace(p.Wishlist) != "" }
 
-// Ready reports whether somebody may be drawn: they entered a wish and do
-// not want more time to think it over.
-func (p Participant) Ready() bool { return p.HasWish() && !p.NeedsTime }
+// ReadyWith reports whether somebody may be drawn, given how many surprise
+// ideas were left for them. They need either a wish or, if they said a
+// surprise is enough, at least one surprise idea. Asking for time to think
+// holds them back in either case: it is an explicit "not yet".
+func (p Participant) ReadyWith(surprises int) bool {
+	if p.NeedsTime {
+		return false
+	}
+	return p.HasWish() || (p.SurpriseSuffices && surprises > 0)
+}
 
 // Thinking reports a wish that is entered but not final yet.
 func (p Participant) Thinking() bool { return p.HasWish() && p.NeedsTime }
@@ -166,6 +175,7 @@ func Open(path string) (*Store, error) {
 // created earlier get them added here.
 var addedColumns = []struct{ table, column, definition string }{
 	{"participant", "needs_time", "INTEGER NOT NULL DEFAULT 0"},
+	{"participant", "surprise_suffices", "INTEGER NOT NULL DEFAULT 0"},
 }
 
 // migrate runs in one transaction, which takes the write lock up front, so
@@ -258,13 +268,13 @@ func (s *Store) CampaignByID(ctx context.Context, id int64) (Campaign, error) {
 		`SELECT `+campaignColumns+` FROM campaign WHERE id = ?`, id))
 }
 
-const participantColumns = `id, campaign_id, name, email, wishlist, surprises_open, needs_time, token, created_at`
+const participantColumns = `id, campaign_id, name, email, wishlist, surprises_open, needs_time, surprise_suffices, token, created_at`
 
 func scanParticipant(row interface{ Scan(...any) error }) (Participant, error) {
 	var p Participant
 	var created string
 	err := row.Scan(&p.ID, &p.CampaignID, &p.Name, &p.Email, &p.Wishlist,
-		&p.SurprisesOpen, &p.NeedsTime, &p.Token, &created)
+		&p.SurprisesOpen, &p.NeedsTime, &p.SurpriseSuffices, &p.Token, &created)
 	if errors.Is(err, sql.ErrNoRows) {
 		return Participant{}, ErrNotFound
 	}
@@ -418,13 +428,18 @@ func (s *Store) SetWish(ctx context.Context, campaignID, participantID int64, te
 		text, needsTime, participantID, campaignID)
 }
 
-// SetSurprisesOpen decides whether others may leave surprise ideas for this
-// participant. Ideas already left stay in place either way; the switch only
-// governs new ones. It cannot change after the draw.
-func (s *Store) SetSurprisesOpen(ctx context.Context, campaignID, participantID int64, open bool) error {
+// SetSurprisePrefs records whether others may leave surprise ideas for this
+// participant and whether one such idea is enough to make them ready without
+// a wish. Ideas already left stay stored either way; while surprises are
+// closed nobody can add new ones and the giver is not shown the existing
+// ones (see SurprisesForGiver). A surprise cannot suffice for somebody who
+// accepts none, so closing also clears "suffices". Neither can change after
+// the draw.
+func (s *Store) SetSurprisePrefs(ctx context.Context, campaignID, participantID int64, open, suffices bool) error {
 	return s.updateWhileOpen(ctx, campaignID,
-		`UPDATE participant SET surprises_open = ? WHERE id = ? AND campaign_id = ?`,
-		open, participantID, campaignID)
+		`UPDATE participant SET surprises_open = ?, surprise_suffices = ?
+		 WHERE id = ? AND campaign_id = ?`,
+		open, open && suffices, participantID, campaignID)
 }
 
 // DeleteParticipant removes somebody from a campaign that is still open. The
@@ -511,7 +526,7 @@ func (s *Store) DeleteExclusion(ctx context.Context, campaignID, exclusionID int
 // transaction that first claims the state transition, so a concurrent second
 // draw or a late join cannot slip in between reading the group and writing
 // the assignment, and a campaign never ends up drawn without a complete one.
-// It refuses while anybody still lacks a wish.
+// It refuses while anybody is not ready (see ReadyWith).
 func (s *Store) Draw(ctx context.Context, campaignID int64) error {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -533,9 +548,13 @@ func (s *Store) Draw(ctx context.Context, campaignID int64) error {
 	if err != nil {
 		return err
 	}
+	counts, err := surpriseCounts(ctx, tx, campaignID)
+	if err != nil {
+		return err
+	}
 	ids := make([]int64, len(participants))
 	for i, p := range participants {
-		if !p.Ready() {
+		if !p.ReadyWith(counts[p.ID]) {
 			return ErrNotReady
 		}
 		ids[i] = p.ID
@@ -690,11 +709,17 @@ func (s *Store) SurpriseBy(ctx context.Context, authorID, recipientID int64) (Su
 // SurprisesForGiver returns the ideas left for whoever the giver drew. It is
 // the only way to read other people's ideas, and it yields nothing before the
 // draw, so a recipient can never see what was left for them.
+//
+// It also yields nothing when the recipient switched surprises off: they may
+// have closed them because they really want what they wished for. The ideas
+// stay stored, so switching back on before the draw brings them back.
 func (s *Store) SurprisesForGiver(ctx context.Context, campaignID, giverID int64) ([]Surprise, error) {
 	rows, err := s.db.QueryContext(ctx, surpriseQuery+`
 		JOIN assignment g ON g.receiver_id = s.recipient_id
 		JOIN campaign c ON c.id = g.campaign_id
+		JOIN participant r ON r.id = s.recipient_id
 		WHERE g.campaign_id = ? AND g.giver_id = ? AND c.state = ?
+		  AND r.surprises_open = 1
 		ORDER BY s.id`, campaignID, giverID, StateDrawn)
 	if err != nil {
 		return nil, err
@@ -705,7 +730,11 @@ func (s *Store) SurprisesForGiver(ctx context.Context, campaignID, giverID int64
 // SurpriseCounts reports how many ideas each participant of a campaign has
 // received, keyed by recipient. Everybody may see these numbers.
 func (s *Store) SurpriseCounts(ctx context.Context, campaignID int64) (map[int64]int, error) {
-	rows, err := s.db.QueryContext(ctx,
+	return surpriseCounts(ctx, s.db, campaignID)
+}
+
+func surpriseCounts(ctx context.Context, q querier, campaignID int64) (map[int64]int, error) {
+	rows, err := q.QueryContext(ctx,
 		`SELECT recipient_id, COUNT(*) FROM surprise
 		 WHERE campaign_id = ? GROUP BY recipient_id`, campaignID)
 	if err != nil {

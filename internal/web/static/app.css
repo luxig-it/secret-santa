@@ -207,6 +207,7 @@ input:focus, select:focus, textarea:focus, button:focus-visible, a:focus-visible
 .md-preview { border: 1px dashed var(--line); border-radius: 8px; padding: 10px 12px; }
 
 .switch-form { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.switch-form.stack { align-items: flex-start; }
 .switch { display: flex; align-items: center; gap: 12px; cursor: pointer; font-weight: 500; margin: 0; }
 .switch input { position: absolute; opacity: 0; width: 1px; height: 1px; }
 .switch-track {

@@ -110,7 +110,7 @@ func TestDrawNeedsEveryWish(t *testing.T) {
 	if _, err := s.AddParticipant(ctx, c.ID, "Dora", "", ""); !errors.Is(err, ErrAlreadyDrawn) {
 		t.Fatalf("late join: got %v, want ErrAlreadyDrawn", err)
 	}
-	if err := s.SetSurprisesOpen(ctx, c.ID, carl.ID, false); !errors.Is(err, ErrAlreadyDrawn) {
+	if err := s.SetSurprisePrefs(ctx, c.ID, carl.ID, false, false); !errors.Is(err, ErrAlreadyDrawn) {
 		t.Fatalf("switch after draw: got %v, want ErrAlreadyDrawn", err)
 	}
 }
@@ -175,7 +175,7 @@ func TestSurpriseRules(t *testing.T) {
 	}
 
 	// Closing the switch blocks new ideas but keeps existing ones editable.
-	if err := s.SetSurprisesOpen(ctx, c.ID, ben.ID, false); err != nil {
+	if err := s.SetSurprisePrefs(ctx, c.ID, ben.ID, false, false); err != nil {
 		t.Fatal(err)
 	}
 	if err := s.SaveSurprise(ctx, c.ID, anna.ID, ben.ID, "a blue scarf"); err != nil {
@@ -184,7 +184,7 @@ func TestSurpriseRules(t *testing.T) {
 	if err := s.SaveSurprise(ctx, c.ID, anna.ID, carl.ID, "x"); err != nil {
 		t.Fatal(err) // Carl is still open.
 	}
-	if err := s.SetSurprisesOpen(ctx, c.ID, carl.ID, false); err != nil {
+	if err := s.SetSurprisePrefs(ctx, c.ID, carl.ID, false, false); err != nil {
 		t.Fatal(err)
 	}
 	if err := s.SaveSurprise(ctx, c.ID, ben.ID, carl.ID, "new"); !errors.Is(err, ErrSurprisesClosed) {
@@ -260,7 +260,7 @@ func TestUpdatesStayInsideTheirCampaign(t *testing.T) {
 	if err := s.SetWish(ctx, c.ID, p.ID, "x", false); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("wish: got %v", err)
 	}
-	if err := s.SetSurprisesOpen(ctx, c.ID, p.ID, false); !errors.Is(err, ErrNotFound) {
+	if err := s.SetSurprisePrefs(ctx, c.ID, p.ID, false, false); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("switch: got %v", err)
 	}
 	if err := s.DeleteParticipant(ctx, c.ID, p.ID); !errors.Is(err, ErrNotFound) {
@@ -296,8 +296,8 @@ func TestNeedsTimeBlocksDraw(t *testing.T) {
 		t.Fatal(err)
 	}
 	got, _ := s.ParticipantByToken(ctx, ben.Token)
-	if !got.HasWish() || !got.NeedsTime || got.Ready() {
-		t.Fatalf("wish=%v needsTime=%v ready=%v, want wish, time, not ready", got.HasWish(), got.NeedsTime, got.Ready())
+	if !got.HasWish() || !got.NeedsTime || got.ReadyWith(0) {
+		t.Fatalf("wish=%v needsTime=%v ready=%v, want wish, time, not ready", got.HasWish(), got.NeedsTime, got.ReadyWith(0))
 	}
 	if err := s.Draw(ctx, c.ID); !errors.Is(err, ErrNotReady) {
 		t.Fatalf("draw while Ben thinks: got %v", err)
@@ -314,8 +314,10 @@ func TestMigrationAddsColumns(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "old.db")
 	s := openAt(t, path)
 	// Simulate a database from before needs_time existed.
-	if _, err := s.db.Exec(`ALTER TABLE participant DROP COLUMN needs_time`); err != nil {
-		t.Fatal(err)
+	for _, c := range addedColumns {
+		if _, err := s.db.Exec(`ALTER TABLE ` + c.table + ` DROP COLUMN ` + c.column); err != nil {
+			t.Fatal(err)
+		}
 	}
 	c := mustCampaign(t, s)
 	if _, err := s.db.Exec(`INSERT INTO participant (campaign_id, name, token, created_at) VALUES (?, 'Old', 'old-token', '2026-01-01T00:00:00Z')`, c.ID); err != nil {
@@ -328,7 +330,100 @@ func TestMigrationAddsColumns(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if p.NeedsTime {
-		t.Fatal("migrated participant needs time by default")
+	if p.NeedsTime || p.SurpriseSuffices {
+		t.Fatal("migrated participant has a switch on by default")
+	}
+}
+
+func TestReadyWith(t *testing.T) {
+	cases := []struct {
+		name      string
+		p         Participant
+		surprises int
+		want      bool
+	}{
+		{"nothing", Participant{}, 0, false},
+		{"wish", Participant{Wishlist: "x"}, 0, true},
+		{"wish but thinking", Participant{Wishlist: "x", NeedsTime: true}, 3, false},
+		{"surprises without the switch", Participant{}, 2, false},
+		{"switch without surprises", Participant{SurpriseSuffices: true}, 0, false},
+		{"switch and a surprise", Participant{SurpriseSuffices: true}, 1, true},
+	}
+	for _, c := range cases {
+		if got := c.p.ReadyWith(c.surprises); got != c.want {
+			t.Errorf("%s: got %v, want %v", c.name, got, c.want)
+		}
+	}
+}
+
+func TestSurpriseInsteadOfWish(t *testing.T) {
+	ctx := context.Background()
+	s := open(t)
+	c := mustCampaign(t, s)
+	anna := mustJoin(t, s, c, "Anna", "x")
+	ben := mustJoin(t, s, c, "Ben", "")
+
+	if err := s.SetSurprisePrefs(ctx, c.ID, ben.ID, true, true); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Draw(ctx, c.ID); !errors.Is(err, ErrNotReady) {
+		t.Fatalf("draw before any surprise for Ben: got %v", err)
+	}
+	if err := s.SaveSurprise(ctx, c.ID, anna.ID, ben.ID, "Schokolade"); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Draw(ctx, c.ID); err != nil {
+		t.Fatalf("draw with a surprise for Ben: %v", err)
+	}
+}
+
+func TestClosingSurprisesClearsSuffices(t *testing.T) {
+	ctx := context.Background()
+	s := open(t)
+	c := mustCampaign(t, s)
+	ben := mustJoin(t, s, c, "Ben", "")
+	if err := s.SetSurprisePrefs(ctx, c.ID, ben.ID, false, true); err != nil {
+		t.Fatal(err)
+	}
+	got, _ := s.ParticipantByToken(ctx, ben.Token)
+	if got.SurprisesOpen || got.SurpriseSuffices {
+		t.Fatalf("open=%v suffices=%v, want both off", got.SurprisesOpen, got.SurpriseSuffices)
+	}
+}
+
+func TestClosedSurprisesAreHiddenFromTheGiver(t *testing.T) {
+	ctx := context.Background()
+	for _, reopen := range []bool{false, true} {
+		s := open(t)
+		c := mustCampaign(t, s)
+		anna := mustJoin(t, s, c, "Anna", "x")
+		ben := mustJoin(t, s, c, "Ben", "the one thing I really want")
+		if err := s.SaveSurprise(ctx, c.ID, anna.ID, ben.ID, "idea"); err != nil {
+			t.Fatal(err)
+		}
+		if err := s.SetSurprisePrefs(ctx, c.ID, ben.ID, false, false); err != nil {
+			t.Fatal(err)
+		}
+		if reopen {
+			if err := s.SetSurprisePrefs(ctx, c.ID, ben.ID, true, false); err != nil {
+				t.Fatal(err)
+			}
+		}
+		if err := s.Draw(ctx, c.ID); err != nil {
+			t.Fatal(err)
+		}
+
+		// The idea is still stored either way.
+		if _, err := s.SurpriseBy(ctx, anna.ID, ben.ID); err != nil {
+			t.Fatalf("reopen=%v: idea gone from the database: %v", reopen, err)
+		}
+		// With two people Anna gives to Ben.
+		got, err := s.SurprisesForGiver(ctx, c.ID, anna.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if want := map[bool]int{false: 0, true: 1}[reopen]; len(got) != want {
+			t.Fatalf("reopen=%v: giver sees %d ideas, want %d", reopen, len(got), want)
+		}
 	}
 }
