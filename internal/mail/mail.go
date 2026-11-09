@@ -35,7 +35,8 @@ type Sender interface {
 	Send(ctx context.Context, m Message) error
 }
 
-// SMTP sends through a server that speaks STARTTLS on the submission port.
+// SMTP sends through a mail server over TLS: either implicit TLS from the
+// first byte (port 465, "SMTPS") or STARTTLS on the submission port 587.
 type SMTP struct {
 	Host string
 	Port string
@@ -45,17 +46,22 @@ type SMTP struct {
 	// Timeout bounds the whole conversation, so a hanging server cannot
 	// hold a request forever.
 	Timeout time.Duration
-	// Insecure allows sending without STARTTLS, for a local relay or a test
-	// server. Off, nothing goes out unencrypted: the mail carries a secret
-	// link.
+	// ImplicitTLS opens the connection with TLS right away, as port 465
+	// expects, instead of upgrading it with STARTTLS.
+	ImplicitTLS bool
+	// Insecure allows sending unencrypted to a server without STARTTLS, for
+	// a local relay or a test server. Off, nothing goes out unencrypted:
+	// the mail carries a secret link. It never relaxes certificate checks
+	// and does not matter with implicit TLS.
 	Insecure bool
 	// TLSConfig overrides the TLS settings, for tests.
 	TLSConfig *tls.Config
 }
 
 // NewSMTP builds a sender from the app's SMTP settings.
-func NewSMTP(host, port, user, pass, from string, insecure bool) SMTP {
-	return SMTP{Host: host, Port: port, User: user, Pass: pass, From: from, Insecure: insecure}
+func NewSMTP(host, port, user, pass, from string, implicitTLS, insecure bool) SMTP {
+	return SMTP{Host: host, Port: port, User: user, Pass: pass, From: from,
+		ImplicitTLS: implicitTLS, Insecure: insecure}
 }
 
 // Address checks that s is exactly one address without a display name or
@@ -72,8 +78,9 @@ func Address(s string) (string, error) {
 	return a.Address, nil
 }
 
-// Send delivers m. It refuses servers without STARTTLS unless Insecure is
-// set, and never sends a login in clear text even then.
+// Send delivers m. With implicit TLS the whole conversation is encrypted
+// from the start. Otherwise it refuses servers without STARTTLS unless
+// Insecure is set, and never sends a login in clear text even then.
 func (s SMTP) Send(ctx context.Context, m Message) error {
 	to, err := Address(m.To)
 	if err != nil {
@@ -90,8 +97,25 @@ func (s SMTP) Send(ctx context.Context, m Message) error {
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
-	var d net.Dialer
-	conn, err := d.DialContext(ctx, "tcp", net.JoinHostPort(s.Host, s.Port))
+	tlsConfig := &tls.Config{MinVersion: tls.VersionTLS12}
+	if s.TLSConfig != nil {
+		tlsConfig = s.TLSConfig.Clone()
+	}
+	if tlsConfig.ServerName == "" {
+		// Both TLS modes verify the certificate against the configured host.
+		tlsConfig.ServerName = s.Host
+	}
+	addr := net.JoinHostPort(s.Host, s.Port)
+	var conn net.Conn
+	if s.ImplicitTLS {
+		// net/smtp recognises the *tls.Conn and treats the session as
+		// encrypted, so it allows the login and skips STARTTLS.
+		d := tls.Dialer{Config: tlsConfig}
+		conn, err = d.DialContext(ctx, "tcp", addr)
+	} else {
+		var d net.Dialer
+		conn, err = d.DialContext(ctx, "tcp", addr)
+	}
 	if err != nil {
 		return fmt.Errorf("connect to mail server: %w", err)
 	}
@@ -105,18 +129,17 @@ func (s SMTP) Send(ctx context.Context, m Message) error {
 	}
 	defer c.Close()
 
-	if ok, _ := c.Extension("STARTTLS"); ok {
-		cfg := s.TLSConfig
-		if cfg == nil {
-			cfg = &tls.Config{ServerName: s.Host, MinVersion: tls.VersionTLS12}
+	if !s.ImplicitTLS {
+		switch ok, _ := c.Extension("STARTTLS"); {
+		case ok:
+			if err := c.StartTLS(tlsConfig); err != nil {
+				return fmt.Errorf("starttls: %w", err)
+			}
+		case s.User != "":
+			return errors.New("mail server offers no STARTTLS; refusing to send the password in clear text")
+		case !s.Insecure:
+			return errors.New("mail server offers no STARTTLS; refusing to send the link unencrypted")
 		}
-		if err := c.StartTLS(cfg); err != nil {
-			return fmt.Errorf("starttls: %w", err)
-		}
-	} else if s.User != "" {
-		return errors.New("mail server offers no STARTTLS; refusing to send the password in clear text")
-	} else if !s.Insecure {
-		return errors.New("mail server offers no STARTTLS; refusing to send the link unencrypted")
 	}
 	if s.User != "" {
 		if err := c.Auth(smtp.PlainAuth("", s.User, s.Pass, s.Host)); err != nil {

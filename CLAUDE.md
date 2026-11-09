@@ -40,7 +40,8 @@ rules; they are the spec.
   reach existing databases.
 - Mail is optional (`SECRET_SANTA_ALLOW_EMAIL`): it only ever sends a
   link to an address the person typed in, never stores the address, is
-  rate-limited per link and per IP, and never logs in without STARTTLS.
+  rate-limited per link and per IP, and never logs in unencrypted
+  (implicit TLS on port 465, STARTTLS otherwise).
   Handlers get a `mail.Sender`, nil when off; tests use a fake.
 - Releases: pushing a `v*` tag runs `.github/workflows/release.yml`, which
   tests, builds and attests the image. Deploying is manual on the server

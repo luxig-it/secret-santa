@@ -80,8 +80,9 @@ With `SECRET_SANTA_ALLOW_EMAIL=true` and the `SECRET_SANTA_SMTP_*` settings,
 an "E-Mail" button next to the personal link (and the organizer's
 management link) sends that link to an address the person types in. The
 address is used for that one message and never stored or logged. Mail only
-goes out over STARTTLS (`SECRET_SANTA_SMTP_INSECURE=true` allows a local
-relay without it). Each link can be mailed three times an hour, each client
+goes out encrypted: implicit TLS on port 465, STARTTLS on any other port,
+or as `SECRET_SANTA_SMTP_TLS` says (`SECRET_SANTA_SMTP_INSECURE=true`
+allows a local relay without encryption). Each link can be mailed three times an hour, each client
 address 30 times and each campaign 60 times; the mail carries only the
 campaign title and the link, never text that participants chose. Without
 `SECRET_SANTA_ORGANIZER_TOKENS` the app generates a key on start and prints

@@ -77,14 +77,17 @@ func TestLoadEmail(t *testing.T) {
 		{"on with smtp", map[string]string{"SECRET_SANTA_ALLOW_EMAIL": "true", "SECRET_SANTA_SMTP_HOST": "smtp.example.com", "SECRET_SANTA_SMTP_FROM": "x@example.com"}, false, true},
 		{"on without smtp", map[string]string{"SECRET_SANTA_ALLOW_EMAIL": "1"}, true, false},
 		{"garbage flag", map[string]string{"SECRET_SANTA_ALLOW_EMAIL": "maybe"}, true, false},
-		{"implicit tls port", map[string]string{"SECRET_SANTA_ALLOW_EMAIL": "on", "SECRET_SANTA_SMTP_HOST": "h", "SECRET_SANTA_SMTP_FROM": "x@example.com", "SECRET_SANTA_SMTP_PORT": "465"}, true, false},
+		{"implicit tls port", map[string]string{"SECRET_SANTA_ALLOW_EMAIL": "on", "SECRET_SANTA_SMTP_HOST": "h", "SECRET_SANTA_SMTP_FROM": "x@example.com", "SECRET_SANTA_SMTP_PORT": "465"}, false, true},
 		{"user without pass", map[string]string{"SECRET_SANTA_ALLOW_EMAIL": "on", "SECRET_SANTA_SMTP_HOST": "h", "SECRET_SANTA_SMTP_FROM": "x@example.com", "SECRET_SANTA_SMTP_USER": "u"}, true, false},
+		{"port with spaces", map[string]string{"SECRET_SANTA_ALLOW_EMAIL": "on", "SECRET_SANTA_SMTP_HOST": "h", "SECRET_SANTA_SMTP_FROM": "x@example.com", "SECRET_SANTA_SMTP_PORT": " 465 "}, false, true},
+		{"port not a number", map[string]string{"SECRET_SANTA_ALLOW_EMAIL": "on", "SECRET_SANTA_SMTP_HOST": "h", "SECRET_SANTA_SMTP_FROM": "x@example.com", "SECRET_SANTA_SMTP_PORT": "smtps"}, true, false},
+		{"bad tls mode", map[string]string{"SECRET_SANTA_ALLOW_EMAIL": "on", "SECRET_SANTA_SMTP_HOST": "h", "SECRET_SANTA_SMTP_FROM": "x@example.com", "SECRET_SANTA_SMTP_TLS": "ssl"}, true, false},
 		{"malformed sender", map[string]string{"SECRET_SANTA_ALLOW_EMAIL": "on", "SECRET_SANTA_SMTP_HOST": "h", "SECRET_SANTA_SMTP_FROM": "Wichteln wichteln@example.com"}, true, false},
 		{"odd settings are fine while mail is off", map[string]string{"SECRET_SANTA_SMTP_HOST": "h", "SECRET_SANTA_SMTP_FROM": "x@example.com", "SECRET_SANTA_SMTP_PORT": "465"}, false, false},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			for _, k := range []string{"SECRET_SANTA_ALLOW_EMAIL", "SECRET_SANTA_SMTP_INSECURE", "SECRET_SANTA_SMTP_HOST", "SECRET_SANTA_SMTP_FROM", "SECRET_SANTA_SMTP_PORT", "SECRET_SANTA_SMTP_USER", "SECRET_SANTA_SMTP_PASS"} {
+			for _, k := range []string{"SECRET_SANTA_ALLOW_EMAIL", "SECRET_SANTA_SMTP_INSECURE", "SECRET_SANTA_SMTP_TLS", "SECRET_SANTA_SMTP_HOST", "SECRET_SANTA_SMTP_FROM", "SECRET_SANTA_SMTP_PORT", "SECRET_SANTA_SMTP_USER", "SECRET_SANTA_SMTP_PASS"} {
 				t.Setenv(k, "")
 			}
 			for k, v := range base {
@@ -129,5 +132,26 @@ func TestParseProxies(t *testing.T) {
 	}
 	if _, err := ParseProxies("nginx"); err == nil {
 		t.Fatal("a hostname was accepted")
+	}
+}
+
+func TestSMTPTLSMode(t *testing.T) {
+	cases := []struct {
+		port, mode string
+		implicit   bool
+	}{
+		{"465", "", true},
+		{"587", "", false},
+		{"2465", "implicit", true},
+		{"465", "starttls", false},
+	}
+	for _, c := range cases {
+		t.Setenv("SECRET_SANTA_ORGANIZER_TOKENS", "a:long-enough-token")
+		t.Setenv("SECRET_SANTA_SMTP_PORT", c.port)
+		t.Setenv("SECRET_SANTA_SMTP_TLS", c.mode)
+		cfg, err := Load()
+		if err != nil || cfg.SMTP.ImplicitTLS != c.implicit {
+			t.Errorf("port %s mode %q: implicit=%v err=%v, want %v", c.port, c.mode, cfg.SMTP.ImplicitTLS, err, c.implicit)
+		}
 	}
 }
