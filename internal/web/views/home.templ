@@ -1,0 +1,72 @@
+package views
+
+templ Home(f Flash) {
+	@Layout("Willkommen") {
+		<section class="hero">
+			<h1>Wichteln, ganz unkompliziert</h1>
+			<p>Lade deine Gruppe mit einem Link ein. Alle tragen ihre Wünsche ein, und wer mag, hinterlegt Überraschungsideen für die anderen. Wenn alle bereit sind, wird ausgelost – und alle erfahren nur, wen sie selbst beschenken.</p>
+		</section>
+		<section class="card narrow">
+			<h2>Kampagne organisieren</h2>
+			@FlashBox(f)
+			<form method="post" action="/login" class="stack">
+				<label for="token">Organisations-Schlüssel</label>
+				<input id="token" name="token" type="password" required autocomplete="current-password"/>
+				<button class="btn" type="submit">Anmelden</button>
+			</form>
+			<p class="hint">Du willst nur mitmachen? Dann brauchst du keinen Schlüssel, sondern den Einladungslink deiner Gruppe.</p>
+		</section>
+	}
+}
+
+templ Organizer(p OrganizerPage) {
+	@Layout("Meine Kampagnen") {
+		<div class="toolbar">
+			<span class="muted">Angemeldet als <b>{ p.Label }</b></span>
+			<form method="post" action="/logout"><button class="btn btn-link" type="submit">Abmelden</button></form>
+		</div>
+		@FlashBox(p.Flash)
+		<section class="card">
+			<h2>Neue Kampagne</h2>
+			<form method="post" action="/organizer/campaigns" class="grid-form">
+				<div class="field wide">
+					<label for="title">Titel</label>
+					<input id="title" name="title" required maxlength="100" placeholder="z. B. Wichteln im Büro 2026" value={ p.Form.Title }/>
+				</div>
+				<div class="field">
+					<label for="budget">Budget <span class="muted">(optional)</span></label>
+					<input id="budget" name="budget" maxlength="50" placeholder="z. B. 20 €" value={ p.Form.Budget }/>
+				</div>
+				<div class="field">
+					<label for="draw_date">Geplante Auslosung <span class="muted">(optional)</span></label>
+					<input id="draw_date" name="draw_date" type="date" value={ p.Form.DrawDate }/>
+				</div>
+				<div class="field wide">
+					<button class="btn" type="submit">Kampagne anlegen</button>
+				</div>
+			</form>
+		</section>
+		<section class="card">
+			<h2>Meine Kampagnen</h2>
+			if len(p.Campaigns) == 0 {
+				<p class="muted">Noch keine Kampagne angelegt.</p>
+			} else {
+				<ul class="campaigns">
+					for _, c := range p.Campaigns {
+						<li>
+							<a href={ templ.URL(organizerPath(c.OrganizerToken, "")) }>{ c.Title }</a>
+							if c.Drawn() {
+								<span class="pill pill-done">Ausgelost</span>
+							} else {
+								<span class="pill pill-open">Offen</span>
+							}
+							if c.DrawDate != "" {
+								<span class="muted">Auslosung { GermanDate(c.DrawDate) }</span>
+							}
+						</li>
+					}
+				</ul>
+			}
+		</section>
+	}
+}

@@ -81,18 +81,33 @@ func Load() (Config, error) {
 }
 
 // ParseOrganizers reads the "label:token,label:token" form. A bare token
-// without a label is accepted and gets a generic one.
+// without a label is accepted and gets a generic one, numbered if needed.
+//
+// Labels must be unique: campaigns are filed under their organizer's label,
+// so two organizers sharing one would see each other's campaigns. Renaming a
+// label therefore also detaches the campaigns filed under the old name.
 func ParseOrganizers(raw string) ([]Organizer, error) {
 	var out []Organizer
 	seen := map[string]bool{}
+	labels := map[string]bool{}
+	bare := 0
 	for _, part := range strings.Split(raw, ",") {
 		part = strings.TrimSpace(part)
 		if part == "" {
 			continue
 		}
-		label, tok := "organizer", part
+		var label, tok string
 		if i := strings.LastIndex(part, ":"); i >= 0 {
 			label, tok = strings.TrimSpace(part[:i]), strings.TrimSpace(part[i+1:])
+		} else {
+			bare++
+			label, tok = "organizer", part
+			if bare > 1 {
+				label = fmt.Sprintf("organizer%d", bare)
+			}
+		}
+		if label == "" {
+			return nil, fmt.Errorf("an organizer entry has an empty label")
 		}
 		if tok == "" {
 			return nil, fmt.Errorf("organizer %q has an empty token", label)
@@ -103,7 +118,11 @@ func ParseOrganizers(raw string) ([]Organizer, error) {
 		if seen[tok] {
 			return nil, fmt.Errorf("organizer %q reuses a token that is already taken", label)
 		}
+		if labels[label] {
+			return nil, fmt.Errorf("organizer label %q is used twice", label)
+		}
 		seen[tok] = true
+		labels[label] = true
 		out = append(out, Organizer{Label: label, Token: tok})
 	}
 	return out, nil

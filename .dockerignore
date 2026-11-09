@@ -1,0 +1,7 @@
+.git
+.devcontainer
+.env
+data
+dist
+*_templ.go
+*.db*
