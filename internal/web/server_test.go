@@ -524,13 +524,16 @@ func TestWishlessOpensSurprisesAndAsksForHelp(t *testing.T) {
 		t.Error("Ben is asked to help himself")
 	}
 
-	// Once Anna helped, her banner goes; Carla still sees it.
-	h.post(c, "/p/"+anna+"/s/"+itoa(pBen.ID), url.Values{"body": {"idea"}})
-	if _, page := h.get(c, "/p/"+anna); strings.Contains(page, banner) {
-		t.Error("Anna still asked after leaving an idea")
-	}
 	if _, page := h.get(c, "/p/"+carla); !strings.Contains(page, banner) {
-		t.Error("Carla is no longer asked although she has not helped")
+		t.Error("Carla sees no banner for Ben")
+	}
+
+	// One idea is enough: the banner goes for everybody, the highlight stays.
+	h.post(c, "/p/"+anna+"/s/"+itoa(pBen.ID), url.Values{"body": {"idea"}})
+	for name, tok := range map[string]string{"Anna": anna, "Carla": carla} {
+		if _, page := h.get(c, "/p/"+tok); strings.Contains(page, banner) || !strings.Contains(page, "member-help") {
+			t.Errorf("after the first idea %s must see no banner but still the highlight", name)
+		}
 	}
 
 	// After the draw nobody is asked any more.

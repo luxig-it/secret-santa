@@ -122,11 +122,12 @@ func (p ParticipantPage) MeMember() Member {
 }
 
 // HelpWanted lists the others who ask for help (see AsksForHelp) and have
-// not got an idea from the viewer yet, for the banner at the top.
+// no idea yet, for the banner at the top. One idea is enough to make them
+// ready, so after that nobody is asked any more; the highlight stays.
 func (p ParticipantPage) HelpWanted() []Member {
 	var out []Member
 	for _, m := range p.Members {
-		if !m.IsMe && !m.ByMe && p.AsksForHelp(m) {
+		if !m.IsMe && p.AsksForHelp(m) && m.Surprises == 0 {
 			out = append(out, m)
 		}
 	}

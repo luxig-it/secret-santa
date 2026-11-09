@@ -28,8 +28,8 @@ The interface is German.
    switched on *Mir fällt nichts ein und ich freue mich über eine Überraschung*
    is also ready without a wish as soon as at least one surprise idea was left
    for them. That switch turns surprises on, highlights them in the group, and
-   shows everybody else a friendly banner asking for an idea until they left
-   one. When everybody
+   shows everybody else a friendly banner asking for an idea until the first
+   one has been left. When everybody
    is ready the organizer draws. The result is a single cycle (nobody draws
    themselves, no pairs that only gift each other), honouring the organizer's
    exclusions.
