@@ -431,7 +431,7 @@ func TestSurpriseSuffices(t *testing.T) {
 	pBen, _ := h.st.ParticipantByToken(t.Context(), ben)
 	h.post(c, "/p/"+anna+"/wish", url.Values{"wishlist": {"x"}})
 
-	if _, loc := h.post(c, "/p/"+ben+"/surprises", url.Values{"open": {"0", "1"}, "suffices": {"0", "1"}}); !strings.Contains(loc, "n=suffices") {
+	if _, loc := h.post(c, "/p/"+ben+"/wish", url.Values{"suffices": {"0", "1"}}); !strings.Contains(loc, "n=suffices") {
 		t.Fatalf("switch on: %q", loc)
 	}
 	if _, page := h.get(c, "/o/"+org); !strings.Contains(page, "Wartet auf eine Überraschung") || !strings.Contains(page, "1 von 2 bereit") {
@@ -439,8 +439,8 @@ func TestSurpriseSuffices(t *testing.T) {
 	}
 
 	h.post(c, "/p/"+anna+"/s/"+itoa(pBen.ID), url.Values{"body": {"IDEA-FOR-BEN"}})
-	if _, page := h.get(c, "/p/"+ben); !strings.Contains(page, "auch ohne eigenen Wunsch bereit") || strings.Contains(page, "IDEA-FOR-BEN") {
-		t.Errorf("Ben's page does not confirm readiness, or leaks the idea: %v %v", strings.Contains(page, "auch ohne eigenen Wunsch bereit"), strings.Contains(page, "IDEA-FOR-BEN"))
+	if _, page := h.get(c, "/p/"+ben); !strings.Contains(page, "damit bist du bereit zur Auslosung") || strings.Contains(page, "IDEA-FOR-BEN") {
+		t.Errorf("Ben's page does not confirm readiness, or leaks the idea: %v %v", strings.Contains(page, "damit bist du bereit zur Auslosung"), strings.Contains(page, "IDEA-FOR-BEN"))
 	}
 	if _, loc := h.post(c, "/o/"+org+"/draw", nil); !strings.Contains(loc, "n=drawn") {
 		t.Fatalf("draw: %q", loc)
@@ -456,8 +456,8 @@ func TestClosingSurprisesDropsSuffices(t *testing.T) {
 	c := h.client()
 	_, join := h.setup()
 	ben := h.join(join, "Ben")
-	h.post(c, "/p/"+ben+"/surprises", url.Values{"open": {"0", "1"}, "suffices": {"0", "1"}})
-	// Closing: the second switch is not rendered then, so it is not sent.
+	h.post(c, "/p/"+ben+"/wish", url.Values{"suffices": {"0", "1"}})
+	// Closing happens in the surprises form, which carries only "open".
 	if _, loc := h.post(c, "/p/"+ben+"/surprises", url.Values{"open": {"0"}}); !strings.Contains(loc, "n=closed-suffices") {
 		t.Fatalf("close: %q", loc)
 	}
@@ -506,14 +506,19 @@ func TestWishlessOpensSurprisesAndAsksForHelp(t *testing.T) {
 	carla := h.join(join, "Carla")
 	pBen, _ := h.st.ParticipantByToken(t.Context(), ben)
 
-	// Ben closes surprises, then flips "nothing comes to mind": that wins
-	// and opens surprises again.
+	// Ben closes surprises and has a draft wish, then switches on "nothing
+	// comes to mind": that opens surprises again and clears the draft.
 	h.post(c, "/p/"+ben+"/surprises", url.Values{"open": {"0"}})
-	if _, loc := h.post(c, "/p/"+ben+"/surprises", url.Values{"open": {"0"}, "suffices": {"0", "1"}}); !strings.Contains(loc, "n=suffices-opened") {
+	h.post(c, "/p/"+ben+"/wish", url.Values{"wishlist": {"draft"}, "needs_time": {"0", "1"}})
+	if _, loc := h.post(c, "/p/"+ben+"/wish", url.Values{"wishlist": {"draft"}, "needs_time": {"0", "1"}, "suffices": {"0", "1"}}); !strings.Contains(loc, "n=suffices-opened") {
 		t.Fatalf("switch on while closed: %q", loc)
 	}
-	if p, _ := h.st.ParticipantByToken(t.Context(), ben); !p.SurprisesOpen || !p.SurpriseSuffices {
-		t.Fatalf("open=%v suffices=%v, want both on", p.SurprisesOpen, p.SurpriseSuffices)
+	if p, _ := h.st.ParticipantByToken(t.Context(), ben); !p.SurprisesOpen || !p.SurpriseSuffices || p.HasWish() || p.NeedsTime {
+		t.Fatalf("open=%v suffices=%v wish=%q needsTime=%v, want open, suffices, no wish, no time", p.SurprisesOpen, p.SurpriseSuffices, p.Wishlist, p.NeedsTime)
+	}
+	// While it is on, the editor is gone.
+	if _, page := h.get(c, "/p/"+ben); strings.Contains(page, `name="wishlist"`) || strings.Contains(page, "Bedenkzeit") {
+		t.Error("wish editor or time-to-think switch still shown while nothing comes to mind")
 	}
 
 	banner := "Ben selbst ist wunschlos glücklich"
@@ -547,28 +552,19 @@ func TestWishlessOpensSurprisesAndAsksForHelp(t *testing.T) {
 	}
 }
 
-func TestResolveSurpriseSwitches(t *testing.T) {
-	off := store.Participant{}
-	both := store.Participant{SurprisesOpen: true, SurpriseSuffices: true}
-	cases := []struct {
-		name           string
-		changed        string
-		open, suffices bool
-		before         store.Participant
-		wantOpen, want bool
-	}{
-		{"suffices on opens", "suffices", false, true, off, true, true},
-		{"closing ends suffices", "open", false, true, both, false, false},
-		// A stale tab still showing both off, where the user turns on
-		// suffices although the stored row already has it.
-		{"stale tab, suffices flipped", "suffices", false, true, both, true, true},
-		{"no JS: suffices newly on", "", false, true, off, true, true},
-		{"no JS: open flipped off", "", false, true, both, false, false},
+func TestTurningOffNothingComesToMindKeepsTheWish(t *testing.T) {
+	h := newHarness(t)
+	c := h.client()
+	_, join := h.setup()
+	ben := h.join(join, "Ben")
+	// Ben hopes for a surprise, then (in another tab) enters a wish after
+	// all, and finally flips the switch off in a tab that has no editor.
+	h.post(c, "/p/"+ben+"/wish", url.Values{"suffices": {"0", "1"}})
+	h.post(c, "/p/"+ben+"/wish", url.Values{"wishlist": {"book"}, "needs_time": {"0"}, "suffices": {"0"}})
+	if _, loc := h.post(c, "/p/"+ben+"/wish", url.Values{"suffices": {"0"}}); strings.Contains(loc, "wish-cleared") || strings.Contains(loc, "suffices-off") {
+		t.Errorf("notice %q after a no-op switch post", loc)
 	}
-	for _, c := range cases {
-		open, suffices := resolveSurpriseSwitches(c.changed, c.open, c.suffices, c.before)
-		if open != c.wantOpen || suffices != c.want {
-			t.Errorf("%s: got open=%v suffices=%v, want %v %v", c.name, open, suffices, c.wantOpen, c.want)
-		}
+	if p, _ := h.st.ParticipantByToken(t.Context(), ben); p.Wishlist != "book" {
+		t.Fatalf("wish = %q, want it kept", p.Wishlist)
 	}
 }
