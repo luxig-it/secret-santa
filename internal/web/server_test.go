@@ -617,3 +617,33 @@ func TestOwnStatusLine(t *testing.T) {
 		}
 	}
 }
+
+func TestOrganizerCanCopyPersonalLinks(t *testing.T) {
+	h := newHarness(t)
+	c := h.client()
+	org, join := h.setup()
+	anna := h.join(join, "Anna")
+	ben := h.join(join, "Ben")
+	for _, tok := range []string{anna, ben} {
+		h.post(c, "/p/"+tok+"/wish", url.Values{"wishlist": {"x"}})
+	}
+	links := func(page string) bool {
+		return strings.Contains(page, `data-copy-value="http://example.test/p/`+anna+`"`) &&
+			strings.Contains(page, `data-copy-value="http://example.test/p/`+ben+`"`)
+	}
+	if _, page := h.get(c, "/o/"+org); !links(page) || !strings.Contains(page, ">Entfernen<") {
+		t.Error("before the draw: personal links or the remove button missing")
+	}
+	h.post(c, "/o/"+org+"/draw", nil)
+	if _, page := h.get(c, "/o/"+org); !links(page) || strings.Contains(page, ">Entfernen<") {
+		t.Error("after the draw: personal links must stay, removing must be gone")
+	}
+	// The join page and the other participants' pages list the group too,
+	// but must never hand out somebody else's link.
+	if _, page := h.get(c, "/j/"+join); strings.Contains(page, anna) || strings.Contains(page, ben) {
+		t.Error("join page exposes a personal token")
+	}
+	if _, page := h.get(c, "/p/"+ben); strings.Contains(page, anna) {
+		t.Error("Ben's page exposes Anna's personal token")
+	}
+}

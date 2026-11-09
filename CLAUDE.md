@@ -20,7 +20,9 @@ rules; they are the spec.
   - Surprise ideas: only the author before the draw; afterwards only whoever
     drew the recipient (`SurprisesForGiver`), and only if the recipient still
     accepts surprises. The recipient never.
-  - The organizer page shows no wishes, ideas or assignments.
+  - The organizer page shows no wishes, ideas or assignments. It does offer
+    each participant's personal link to copy, for lost links; the join page
+    and other participants' pages never show anybody else's link.
 - Readiness is `Participant.ReadyWith(surpriseCount)`: no `needs_time`, and
   either a wish or `surprise_suffices` with at least one surprise idea. The
   draw checks it inside its transaction; views use `Member.Ready()`. After the draw nothing changes any more.

@@ -385,8 +385,10 @@ func validDate(v string) bool {
 }
 
 // members builds the group overview. viewer is 0 on pages that belong to no
-// participant.
-func (s *Server) members(ctx context.Context, c store.Campaign, viewer int64) ([]views.Member, error) {
+// participant. Personal tokens are secrets: they are only kept when withLinks
+// is set, which only the organizer's page does, so no other page even holds
+// somebody else's link.
+func (s *Server) members(ctx context.Context, c store.Campaign, viewer int64, withLinks bool) ([]views.Member, error) {
 	ps, err := s.store.Participants(ctx, c.ID)
 	if err != nil {
 		return nil, err
@@ -403,6 +405,9 @@ func (s *Server) members(ctx context.Context, c store.Campaign, viewer int64) ([
 	}
 	out := make([]views.Member, len(ps))
 	for i, p := range ps {
+		if !withLinks {
+			p.Token = ""
+		}
 		m := views.Member{Participant: p, IsMe: p.ID == viewer, ByMe: byMe[p.ID]}
 		// Ideas for somebody who switched surprises off will never be shown,
 		// so they do not count for anybody. Only the recipient is told how
@@ -423,7 +428,7 @@ func (s *Server) manage(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
-	members, err := s.members(r.Context(), c, 0)
+	members, err := s.members(r.Context(), c, 0, true)
 	if err != nil {
 		s.fail(w, r, err)
 		return
@@ -435,7 +440,8 @@ func (s *Server) manage(w http.ResponseWriter, r *http.Request) {
 	}
 	s.render(w, r, http.StatusOK, views.Manage(views.ManagePage{
 		CampaignPage: views.CampaignPage{Campaign: c, Members: members, Flash: noticeFrom(r)},
-		JoinURL:      s.cfg.BaseURL + "/j/" + c.JoinToken,
+		BaseURL:      s.cfg.BaseURL,
+		JoinURL:      views.JoinURL(s.cfg.BaseURL, c.JoinToken),
 		AdminURL:     views.OrganizerURL(s.cfg.BaseURL, c.OrganizerToken),
 		Exclusions:   excl,
 	}))
@@ -538,7 +544,7 @@ func (s *Server) joinPage(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) renderJoin(w http.ResponseWriter, r *http.Request, c store.Campaign, status int, f views.Flash, name string) {
-	members, err := s.members(r.Context(), c, 0)
+	members, err := s.members(r.Context(), c, 0, false)
 	if err != nil {
 		s.fail(w, r, err)
 		return
@@ -610,7 +616,7 @@ func (s *Server) participant(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) renderParticipant(w http.ResponseWriter, r *http.Request, me store.Participant, c store.Campaign, status int, f views.Flash) {
 	ctx := r.Context()
-	members, err := s.members(ctx, c, me.ID)
+	members, err := s.members(ctx, c, me.ID, false)
 	if err != nil {
 		s.fail(w, r, err)
 		return
@@ -618,7 +624,7 @@ func (s *Server) renderParticipant(w http.ResponseWriter, r *http.Request, me st
 	page := views.ParticipantPage{
 		CampaignPage: views.CampaignPage{Campaign: c, Members: members, Flash: f},
 		Me:           me,
-		MyURL:        s.cfg.BaseURL + "/p/" + me.Token,
+		MyURL:        views.ParticipantURL(s.cfg.BaseURL, me.Token),
 	}
 	if c.Drawn() {
 		receiver, err := s.store.Receiver(ctx, c.ID, me.ID)

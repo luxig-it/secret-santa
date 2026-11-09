@@ -20,6 +20,7 @@ templ Manage(p ManagePage) {
 			<p>Über diesen Link kommst du jederzeit zurück auf diese Seite – auch ohne Anmeldung. Gib ihn nur an Leute weiter, die mitorganisieren sollen.</p>
 			@CopyField("admin-url", "Verwaltungslink", p.AdminURL)
 			<p class="hint">Wünsche, Überraschungsideen und die Zuordnung siehst du hier bewusst nicht.</p>
+			<p class="hint">Hat jemand den persönlichen Link verloren, kopiere ihn in der Gruppe über „Link kopieren“ und schick ihn nur dieser Person. Wer einen persönlichen Link öffnet, sieht die Seite dieser Person – nach der Auslosung also auch, wen sie beschenkt.</p>
 		</section>
 		@Group(p.CampaignPage, manageActions(p))
 		if !p.Campaign.Drawn() {
@@ -30,10 +31,18 @@ templ Manage(p ManagePage) {
 }
 
 func manageActions(p ManagePage) func(Member) templ.Component {
-	if p.Campaign.Drawn() {
-		return nil
-	}
-	return func(m Member) templ.Component { return removeButton(p, m) }
+	return func(m Member) templ.Component { return memberActions(p, m) }
+}
+
+// memberActions lets the organizer hand somebody their lost personal link
+// again and, before the draw, remove them.
+templ memberActions(p ManagePage, m Member) {
+	<div class="row">
+		@CopyTextButton(ParticipantURL(p.BaseURL, m.Token), "Link kopieren", "Link kopieren – persönlicher Link von "+m.Name)
+		if !p.Campaign.Drawn() {
+			@removeButton(p, m)
+		}
+	</div>
 }
 
 templ removeButton(p ManagePage, m Member) {

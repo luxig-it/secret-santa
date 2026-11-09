@@ -38,8 +38,9 @@ The interface is German.
    every surprise idea left for them. After the draw nothing can be changed.
 
 The organizer page deliberately shows neither wishes, ideas nor the
-assignment. The organizer can take part by joining through the join link
-like everybody else.
+assignment. It does let the organizer copy each participant's personal link,
+for whoever lost theirs. The organizer can take part by joining through the
+join link like everybody else.
 
 ## Running
 
@@ -87,5 +88,7 @@ shared by hand.
   and images turned into links.
 - Failed organizer logins are limited to 10 per client address in 15 minutes.
   Behind a reverse proxy all clients share the proxy's address.
-- A lost private link cannot be recovered yet; there is no mail and the
-  organizer cannot see participants' links.
+- A lost private link is recovered by the organizer, who can copy every
+  participant's link from the group on the campaign page. Opening such a
+  link shows that person's page, after the draw including whom they give
+  to, so organizers should only pass it to that person.
