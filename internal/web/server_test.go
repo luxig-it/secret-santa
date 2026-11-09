@@ -421,3 +421,47 @@ func TestNeedsTimeSwitch(t *testing.T) {
 		t.Fatalf("draw after Ben decided: %q", loc)
 	}
 }
+
+func TestSurpriseSuffices(t *testing.T) {
+	h := newHarness(t)
+	c := h.client()
+	org, join := h.setup()
+	anna := h.join(join, "Anna")
+	ben := h.join(join, "Ben")
+	pBen, _ := h.st.ParticipantByToken(t.Context(), ben)
+	h.post(c, "/p/"+anna+"/wish", url.Values{"wishlist": {"x"}})
+
+	if _, loc := h.post(c, "/p/"+ben+"/surprises", url.Values{"open": {"0", "1"}, "suffices": {"0", "1"}}); !strings.Contains(loc, "n=suffices") {
+		t.Fatalf("switch on: %q", loc)
+	}
+	if _, page := h.get(c, "/o/"+org); !strings.Contains(page, "Wartet auf eine Überraschung") || !strings.Contains(page, "1 von 2 bereit") {
+		t.Error("organizer page does not show Ben waiting for a surprise")
+	}
+
+	h.post(c, "/p/"+anna+"/s/"+itoa(pBen.ID), url.Values{"body": {"IDEA-FOR-BEN"}})
+	if _, page := h.get(c, "/p/"+ben); !strings.Contains(page, "auch ohne eigenen Wunsch bereit") || strings.Contains(page, "IDEA-FOR-BEN") {
+		t.Errorf("Ben's page does not confirm readiness, or leaks the idea: %v %v", strings.Contains(page, "auch ohne eigenen Wunsch bereit"), strings.Contains(page, "IDEA-FOR-BEN"))
+	}
+	if _, loc := h.post(c, "/o/"+org+"/draw", nil); !strings.Contains(loc, "n=drawn") {
+		t.Fatalf("draw: %q", loc)
+	}
+	// Anna drew Ben: she learns he has no wish and sees the idea.
+	if _, page := h.get(c, "/p/"+anna); !strings.Contains(page, "keinen eigenen Wunsch") || !strings.Contains(page, "IDEA-FOR-BEN") {
+		t.Error("Anna's result does not explain the missing wish or lacks the idea")
+	}
+}
+
+func TestClosingSurprisesDropsSuffices(t *testing.T) {
+	h := newHarness(t)
+	c := h.client()
+	_, join := h.setup()
+	ben := h.join(join, "Ben")
+	h.post(c, "/p/"+ben+"/surprises", url.Values{"open": {"0", "1"}, "suffices": {"0", "1"}})
+	// Closing: the second switch is not rendered then, so it is not sent.
+	if _, loc := h.post(c, "/p/"+ben+"/surprises", url.Values{"open": {"0"}}); !strings.Contains(loc, "n=closed-suffices") {
+		t.Fatalf("close: %q", loc)
+	}
+	if p, _ := h.st.ParticipantByToken(t.Context(), ben); p.SurpriseSuffices {
+		t.Error("surprise still suffices after closing surprises")
+	}
+}

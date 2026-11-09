@@ -21,6 +21,9 @@ CREATE TABLE IF NOT EXISTS participant (
     -- Set while somebody wants to think their wish over; they are not
     -- ready for the draw until they clear it.
     needs_time  INTEGER NOT NULL DEFAULT 0,
+    -- Set when one surprise idea is enough: with at least one left for
+    -- them, they are ready without a wish of their own.
+    surprise_suffices INTEGER NOT NULL DEFAULT 0,
     token       TEXT    NOT NULL UNIQUE,
     created_at  TEXT    NOT NULL
 );

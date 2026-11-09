@@ -20,9 +20,9 @@ rules; they are the spec.
   - Surprise ideas: only the author before the draw; afterwards only whoever
     drew the recipient (`SurprisesForGiver`). The recipient never.
   - The organizer page shows no wishes, ideas or assignments.
-- A participant is ready once they entered a wish and did not ask for more
-  time to think (`needs_time`); the draw requires every participant to be
-  ready. After the draw nothing changes any more.
+- Readiness is `Participant.ReadyWith(surpriseCount)`: no `needs_time`, and
+  either a wish or `surprise_suffices` with at least one surprise idea. The
+  draw checks it inside its transaction; views use `Member.Ready()`. After the draw nothing changes any more.
 - Every store write that depends on campaign state checks it inside its
   transaction (`requireOpen`); the DSN takes the write lock up front.
 - Pages carry secrets in their URL: keep `Referrer-Policy: no-referrer`,

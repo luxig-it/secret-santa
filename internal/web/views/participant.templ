@@ -22,9 +22,13 @@ templ resultCard(p ParticipantPage) {
 	<section class="card card-result" id="ergebnis">
 		<h2>🎉 Du beschenkst <span class="receiver">{ p.Receiver.Name }</span></h2>
 		<h3>Wunsch von { p.Receiver.Name }</h3>
-		<div class="prose box">
-			@templ.Raw(renderMarkdown(p.Receiver.Wishlist))
-		</div>
+		if p.Receiver.HasWish() {
+			<div class="prose box">
+				@templ.Raw(renderMarkdown(p.Receiver.Wishlist))
+			</div>
+		} else {
+			<p class="notice notice-gift">{ p.Receiver.Name } hat keinen eigenen Wunsch hinterlegt und freut sich über jede Überraschung – schau dir die Ideen der Gruppe an.</p>
+		}
 		<h3>Überraschungsideen aus der Gruppe</h3>
 		if len(p.Surprises) == 0 {
 			<p class="muted">Für { p.Receiver.Name } wurden keine Überraschungsideen hinterlegt.</p>
@@ -54,7 +58,11 @@ templ wishCard(p ParticipantPage) {
 			}
 			<p class="muted">Die Auslosung ist erfolgt, dein Wunsch ist damit festgeschrieben.</p>
 		} else {
-			if !p.Me.HasWish() {
+			if m := p.MeMember(); m.SurpriseInsteadOfWish() {
+				<p class="notice notice-gift">Für dich liegt schon eine Überraschung bereit – du bist auch ohne eigenen Wunsch bereit. Einen Wunsch kannst du trotzdem eintragen.</p>
+			} else if m.AwaitsSurprise() {
+				<p class="notice">Du bist bereit, sobald jemand eine Überraschung für dich hinterlegt – oder sobald du selbst einen Wunsch einträgst.</p>
+			} else if !p.Me.HasWish() {
 				<p class="notice">Sobald du einen Wunsch hinterlegst, bist du bereit zur Auslosung. Ohne Wunsch kann nicht ausgelost werden.</p>
 			} else if p.Me.Thinking() {
 				<p class="notice">Du hast dir noch Bedenkzeit genommen und giltst deshalb noch nicht als bereit. Schalte sie aus, sobald dein Wunsch feststeht.</p>
@@ -85,23 +93,35 @@ templ mySurprisesCard(p ParticipantPage) {
 			<p class="notice notice-gift">🎁 Für dich { pluralWas(n) } { plural(n, "Überraschung", "Überraschungen") } hinterlegt.</p>
 		}
 		if p.Campaign.Drawn() {
-			if p.Me.SurprisesOpen {
+			if p.Me.SurpriseSuffices && !p.Me.HasWish() {
+				<p class="muted">Dir hat eine Überraschung als Wunsch genügt.</p>
+			} else if p.Me.SurprisesOpen {
 				<p class="muted">Du warst offen für Überraschungen.</p>
 			} else {
 				<p class="muted">Du wolltest keine Überraschungen.</p>
 			}
 		} else {
-			<form method="post" action={ templ.URL(participantPath(p.Me.Token, "/surprises")) } class="switch-form" data-autosubmit>
+			<form method="post" action={ templ.URL(participantPath(p.Me.Token, "/surprises")) } class="switch-form stack" data-autosubmit>
 				<input type="hidden" name="open" value="0"/>
 				<label class="switch">
 					<input type="checkbox" name="open" value="1" checked?={ p.Me.SurprisesOpen } role="switch"/>
 					<span class="switch-track" aria-hidden="true"></span>
 					<span>Andere dürfen Überraschungen für mich hinterlegen</span>
 				</label>
+				if p.Me.SurprisesOpen {
+					<input type="hidden" name="suffices" value="0"/>
+					<label class="switch">
+						<input type="checkbox" name="suffices" value="1" checked?={ p.Me.SurpriseSuffices } role="switch"/>
+						<span class="switch-track" aria-hidden="true"></span>
+						<span>Eine Überraschung genügt mir <span class="muted">– sobald mindestens eine für mich hinterlegt ist, brauche ich keinen eigenen Wunsch</span></span>
+					</label>
+				}
 				<button class="btn btn-secondary btn-small js-hide" type="submit">Speichern</button>
 			</form>
 			if !p.Me.SurprisesOpen && p.MySurpriseCount() > 0 {
 				<p class="hint">Bereits hinterlegte Ideen bleiben erhalten, es kommen nur keine neuen hinzu.</p>
+			} else if p.Me.SurprisesOpen && p.Me.SurpriseSuffices {
+				<p class="hint">Schaltest du Überraschungen aus, genügt dir auch keine mehr als Wunsch.</p>
 			}
 		}
 	</section>

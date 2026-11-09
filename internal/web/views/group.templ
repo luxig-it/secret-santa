@@ -27,6 +27,8 @@ templ Group(p CampaignPage, actions func(Member) templ.Component) {
 						<ul class="badges">
 							if m.HasWish() {
 								<li class="badge badge-yes">✓ Wunsch hinterlegt</li>
+							} else if m.SurpriseSuffices {
+								<li class={ "badge", templ.KV("badge-yes", m.Surprises > 0), templ.KV("badge-neutral", m.Surprises == 0) }>✨ Lässt sich überraschen</li>
 							} else {
 								<li class="badge badge-no">✗ Noch kein Wunsch</li>
 							}
@@ -41,6 +43,8 @@ templ Group(p CampaignPage, actions func(Member) templ.Component) {
 								<li class="badge badge-ready">● Bereit zur Auslosung</li>
 							} else if m.Thinking() {
 								<li class="badge badge-think">⏳ Braucht noch Bedenkzeit</li>
+							} else if m.AwaitsSurprise() {
+								<li class="badge badge-think">○ Wartet auf eine Überraschung</li>
 							} else {
 								<li class="badge badge-wait">○ Noch nicht bereit</li>
 							}

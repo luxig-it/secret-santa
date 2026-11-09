@@ -35,6 +35,19 @@ type Member struct {
 	ByMe bool
 }
 
+// Ready mirrors the draw's precondition.
+func (m Member) Ready() bool { return m.ReadyWith(m.Surprises) }
+
+// AwaitsSurprise marks somebody who will be ready as soon as anybody leaves
+// a surprise idea for them – worth pointing out to the rest of the group.
+func (m Member) AwaitsSurprise() bool {
+	return !m.Ready() && m.Participant.ReadyWith(m.Surprises+1)
+}
+
+// SurpriseInsteadOfWish marks somebody who is ready only thanks to the
+// surprise ideas left for them.
+func (m Member) SurpriseInsteadOfWish() bool { return m.Ready() && !m.HasWish() }
+
 // CampaignPage is what every page about one campaign needs.
 type CampaignPage struct {
 	Campaign store.Campaign
@@ -82,15 +95,18 @@ type ParticipantPage struct {
 	Surprises []store.Surprise
 }
 
-// MySurpriseCount is how many ideas others left for the viewer.
-func (p ParticipantPage) MySurpriseCount() int {
+// MeMember is the viewer's own row, with the counts the readiness rules need.
+func (p ParticipantPage) MeMember() Member {
 	for _, m := range p.Members {
 		if m.IsMe {
-			return m.Surprises
+			return m
 		}
 	}
-	return 0
+	return Member{Participant: p.Me}
 }
+
+// MySurpriseCount is how many ideas others left for the viewer.
+func (p ParticipantPage) MySurpriseCount() int { return p.MeMember().Surprises }
 
 // SurprisePage edits the idea the viewer leaves for somebody.
 type SurprisePage struct {

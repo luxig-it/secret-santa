@@ -90,7 +90,7 @@ templ drawCard(p ManagePage) {
 			if len(p.Members) < 2 {
 				<p>Für eine Auslosung braucht es mindestens zwei Personen.</p>
 			} else if !p.AllReady() {
-				<p>Ausgelost werden kann, sobald alle einen Wunsch hinterlegt haben und keine Bedenkzeit mehr brauchen. Bereit sind gerade <b>{ fmt.Sprintf("%d von %d", p.ReadyCount(), len(p.Members)) }</b>.</p>
+				<p>Ausgelost werden kann, sobald alle bereit sind: mit einem Wunsch und ohne Bedenkzeit – oder, wer sich überraschen lässt, mit mindestens einer Überraschung. Bereit sind gerade <b>{ fmt.Sprintf("%d von %d", p.ReadyCount(), len(p.Members)) }</b>.</p>
 			} else {
 				<p>Alle sind bereit. Nach der Auslosung kann niemand mehr beitreten, und Wünsche sowie Überraschungsideen lassen sich nicht mehr ändern.</p>
 			}
