@@ -375,3 +375,17 @@ func TestSurpriseAcrossCampaigns(t *testing.T) {
 		t.Fatalf("editor for someone in another campaign: %d", code)
 	}
 }
+
+func TestAdminLinkShown(t *testing.T) {
+	h := newHarness(t)
+	org, _ := h.setup()
+	c := h.client()
+	h.post(c, "/login", url.Values{"token": {orgSecret}})
+	adminURL := "http://example.test/o/" + org
+	if _, page := h.get(c, "/o/"+org); !strings.Contains(page, `value="`+adminURL+`"`) {
+		t.Error("manage page lacks the admin link field")
+	}
+	if _, page := h.get(c, "/organizer"); !strings.Contains(page, `data-copy-value="`+adminURL+`"`) {
+		t.Error("campaign list lacks the copy button for the admin link")
+	}
+}

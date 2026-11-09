@@ -69,7 +69,10 @@ templ CopyField(id, label, value string) {
 		<label for={ id }>{ label }</label>
 		<div class="copy-row">
 			<input id={ id } type="text" readonly value={ value }/>
-			<button type="button" class="btn btn-secondary" data-copy={ id }>Kopieren</button>
+			<button type="button" class="btn btn-secondary btn-copy" data-copy={ id }>
+				@copyIcon()
+				<span class="copy-label" aria-live="polite">Kopieren</span>
+			</button>
 		</div>
 	</div>
 }
@@ -92,4 +95,20 @@ templ ErrorPage(msg string) {
 			<p><a href="/">Zur Startseite</a></p>
 		</section>
 	}
+}
+
+templ copyIcon() {
+	<svg class="icon" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" focusable="false">
+		<rect x="9" y="9" width="11" height="11" rx="2" fill="none" stroke="currentColor" stroke-width="2"></rect>
+		<path d="M5 15V6a2 2 0 0 1 2-2h9" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"></path>
+	</svg>
+}
+
+// CopyButton copies a value that is not shown in a field, such as the
+// management link in the campaign list.
+templ CopyButton(value, label string) {
+	<button type="button" class="btn btn-secondary btn-small btn-copy btn-icon" data-copy-value={ value } aria-label={ label } title={ label }>
+		@copyIcon()
+		<span class="copy-label sr-only" aria-live="polite">Kopieren</span>
+	</button>
 }

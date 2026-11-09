@@ -65,6 +65,7 @@ func (p CampaignPage) AllReady() bool {
 type ManagePage struct {
 	CampaignPage
 	JoinURL    string
+	AdminURL   string
 	Exclusions []store.Exclusion
 }
 
@@ -106,6 +107,7 @@ type SurprisePage struct {
 
 // OrganizerPage lists an organizer's campaigns.
 type OrganizerPage struct {
+	BaseURL   string
 	Label     string
 	Campaigns []store.Campaign
 	Flash     Flash
@@ -139,7 +141,10 @@ func plural(n int, one, many string) string {
 
 func participantPath(token string, rest string) string { return "/p/" + token + rest }
 func organizerPath(token string, rest string) string   { return "/o/" + token + rest }
-func joinPath(token string) string                     { return "/j/" + token }
+
+// OrganizerURL is the absolute management link of a campaign.
+func OrganizerURL(base, token string) string { return base + organizerPath(token, "") }
+func joinPath(token string) string           { return "/j/" + token }
 func idPath(prefix string, id int64, rest string) string {
 	return fmt.Sprintf("%s/%d%s", prefix, id, rest)
 }

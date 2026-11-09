@@ -11,20 +11,56 @@
     history.replaceState(null, "", u.pathname + u.search + u.hash);
   }
 
-  // Copy buttons next to read-only link fields.
-  document.addEventListener("click", async (ev) => {
-    const btn = ev.target.closest("[data-copy]");
-    if (!btn) return;
-    const input = document.getElementById(btn.dataset.copy);
-    input.select();
+  // Copy buttons, either next to a read-only field (data-copy names its id)
+  // or carrying the value themselves (data-copy-value).
+  const copyText = async (value, input) => {
     try {
-      await navigator.clipboard.writeText(input.value);
+      await navigator.clipboard.writeText(value);
+      return true;
     } catch {
-      document.execCommand("copy");
+      // Without the async clipboard (plain http on a LAN address) fall back
+      // to copying a selection, using a hidden throwaway field if needed.
+      const field = input || document.createElement("textarea");
+      if (!input) {
+        field.value = value;
+        field.readOnly = true;
+        field.style.cssText = "position:fixed;top:0;left:-9999px;opacity:0";
+        document.body.append(field);
+      }
+      field.focus({ preventScroll: true });
+      field.setSelectionRange(0, value.length); // select() is not enough on iOS
+      let ok = false;
+      try {
+        ok = document.execCommand("copy");
+      } catch {}
+      if (!input) field.remove();
+      return ok;
     }
-    const label = btn.textContent;
-    btn.textContent = "Kopiert ✓";
-    setTimeout(() => (btn.textContent = label), 1500);
+  };
+
+  document.addEventListener("click", async (ev) => {
+    const btn = ev.target.closest("[data-copy], [data-copy-value]");
+    if (!btn) return;
+    const input = btn.dataset.copy ? document.getElementById(btn.dataset.copy) : null;
+    const value = input ? input.value : btn.dataset.copyValue;
+    if (!value) return;
+    if (input) input.select();
+
+    const ok = await copyText(value, input);
+    const label = btn.querySelector(".copy-label");
+    btn.dataset.label ??= label ? label.textContent : "";
+    btn.dataset.aria ??= btn.getAttribute("aria-label") || "";
+    const text = ok ? "Kopiert ✓" : "Bitte selbst kopieren";
+    if (label) label.textContent = text;
+    if (btn.dataset.aria) btn.setAttribute("aria-label", text);
+    btn.classList.toggle("copied", ok);
+
+    clearTimeout(btn._copyTimer);
+    btn._copyTimer = setTimeout(() => {
+      btn.classList.remove("copied");
+      if (label) label.textContent = btn.dataset.label;
+      if (btn.dataset.aria) btn.setAttribute("aria-label", btn.dataset.aria);
+    }, 1500);
   });
 
   // Confirmation for destructive forms and buttons.

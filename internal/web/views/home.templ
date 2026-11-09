@@ -55,6 +55,7 @@ templ Organizer(p OrganizerPage) {
 					for _, c := range p.Campaigns {
 						<li>
 							<a href={ templ.URL(organizerPath(c.OrganizerToken, "")) }>{ c.Title }</a>
+							@CopyButton(OrganizerURL(p.BaseURL, c.OrganizerToken), "Verwaltungslink von „"+c.Title+"“ kopieren")
 							if c.Drawn() {
 								<span class="pill pill-done">Ausgelost</span>
 							} else {
