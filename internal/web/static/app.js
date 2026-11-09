@@ -64,7 +64,10 @@
     if (!url || url === "https://") return;
     const { selectionStart: s, selectionEnd: e, value: v } = ta;
     const text = v.slice(s, e) || "Linktext";
-    ta.setRangeText(`[${text}](${url.trim()})`, s, e, "end");
+    // Spaces end a Markdown link and parentheses confuse it, as in many
+    // Wikipedia URLs; encoding them keeps the link intact.
+    const dest = url.trim().replace(/ /g, "%20").replace(/\(/g, "%28").replace(/\)/g, "%29");
+    ta.setRangeText(`[${text}](${dest})`, s, e, "end");
   };
 
   // Enter inside a list item starts the next item; Enter on an empty item

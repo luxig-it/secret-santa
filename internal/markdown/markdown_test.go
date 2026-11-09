@@ -18,6 +18,7 @@ func TestRender(t *testing.T) {
 		{"raw html", "<script>alert(1)</script><b>x</b>", nil, []string{"<script", "<b>"}},
 		{"javascript url", "[x](javascript:alert(1))", nil, []string{"javascript:"}},
 		{"image becomes link", "![Bild](https://tracker.example/p.gif)", []string{`<a href="https://tracker.example/p.gif"`, ">Bild</a>"}, []string{"<img"}},
+		{"image inside link", "[![Bild](https://a.example/x.png)](https://b.example)", []string{`<a href="https://b.example"`, ">Bild</a>"}, []string{"a.example", "<img"}},
 		{"bare image", "![](https://tracker.example/p.gif)", []string{">https://tracker.example/p.gif</a>"}, []string{"<img"}},
 	}
 	for _, c := range cases {

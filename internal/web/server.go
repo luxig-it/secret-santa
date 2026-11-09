@@ -7,8 +7,8 @@ package web
 import (
 	"context"
 	"crypto/sha256"
-	"encoding/hex"
 	"embed"
+	"encoding/hex"
 	"errors"
 	"io/fs"
 	"log/slog"
@@ -30,6 +30,16 @@ import (
 //go:embed static
 var staticFiles embed.FS
 
+var static = func() fs.FS {
+	sub, err := fs.Sub(staticFiles, "static")
+	if err != nil {
+		panic(err)
+	}
+	return sub
+}()
+
+func init() { views.AssetVersion = hashFiles(static) }
+
 // Input limits. They keep the database small and the pages readable; the
 // templates set the same maxlength so honest users never hit them.
 const (
@@ -48,20 +58,21 @@ type Server struct {
 	store  *store.Store
 	log    *slog.Logger
 	secure bool
+	logins *limiter
 }
 
 // New wires up every route.
 func New(cfg config.Config, st *store.Store, log *slog.Logger) http.Handler {
-	s := &Server{cfg: cfg, store: st, log: log, secure: strings.HasPrefix(cfg.BaseURL, "https://")}
-
-	static, err := fs.Sub(staticFiles, "static")
-	if err != nil {
-		panic(err)
+	s := &Server{
+		cfg:    cfg,
+		store:  st,
+		log:    log,
+		secure: strings.HasPrefix(cfg.BaseURL, "https://"),
+		logins: newLimiter(loginFailures, loginWindow),
 	}
-	views.AssetVersion = hashFiles(static)
 
 	mux := http.NewServeMux()
-	mux.Handle("GET /static/", http.StripPrefix("/static/", cacheStatic(http.FileServerFS(static))))
+	mux.HandleFunc("GET /static/{file}", s.static)
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) { w.Write([]byte("ok\n")) })
 
 	mux.HandleFunc("GET /{$}", s.home)
@@ -108,9 +119,24 @@ func (s *Server) secureHeaders(next http.Handler) http.Handler {
 	})
 }
 
+// limitBody caps and parses every form up front. Handlers read fields with
+// PostFormValue, which swallows parse errors and returns "", and an empty
+// wish or idea means "delete" – so a broken or oversized body must be turned
+// away here instead of reaching them.
 func (s *Server) limitBody(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		r.Body = http.MaxBytesReader(w, r.Body, maxForm)
+		if r.Method == http.MethodPost {
+			if err := r.ParseForm(); err != nil {
+				status := http.StatusBadRequest
+				var tooBig *http.MaxBytesError
+				if errors.As(err, &tooBig) {
+					status = http.StatusRequestEntityTooLarge
+				}
+				s.render(w, r, status, views.ErrorPage("Die Eingabe konnte nicht verarbeitet werden. Ist der Text zu lang?"))
+				return
+			}
+		}
 		next.ServeHTTP(w, r)
 	})
 }
@@ -133,12 +159,21 @@ func hashFiles(fsys fs.FS) string {
 	return hex.EncodeToString(h.Sum(nil))[:12]
 }
 
-func cacheStatic(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// URLs carry a content hash, so a cached copy is never stale.
+// static serves one embedded file. Only existing files are cached, and only
+// for a long time when the URL carries the current content hash.
+func (s *Server) static(w http.ResponseWriter, r *http.Request) {
+	name := r.PathValue("file")
+	info, err := fs.Stat(static, name)
+	if err != nil || info.IsDir() {
+		http.NotFound(w, r)
+		return
+	}
+	if r.URL.Query().Get("v") == views.AssetVersion {
 		w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
-		next.ServeHTTP(w, r)
-	})
+	} else {
+		w.Header().Set("Cache-Control", "no-cache")
+	}
+	http.ServeFileFS(w, r, static, name)
 }
 
 // --- rendering helpers -----------------------------------------------------
@@ -242,11 +277,16 @@ func (s *Server) home(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 	secret := strings.TrimSpace(r.PostFormValue("token"))
+	ip := clientIP(r)
+	if !s.logins.allow(ip) {
+		s.log.Warn("organizer login throttled", "remote", ip)
+		s.render(w, r, http.StatusTooManyRequests, views.Home(errorFlash("Zu viele Fehlversuche. Bitte versuche es in ein paar Minuten noch einmal.")))
+		return
+	}
 	org, ok := s.cfg.MatchOrganizer(secret)
 	if !ok {
-		// A pause per failed attempt makes guessing a short token tedious.
-		time.Sleep(500 * time.Millisecond)
-		s.log.Warn("organizer login failed", "remote", r.RemoteAddr)
+		s.logins.fail(ip)
+		s.log.Warn("organizer login failed", "remote", ip)
 		s.render(w, r, http.StatusUnauthorized, views.Home(errorFlash("Dieser Schlüssel ist nicht bekannt.")))
 		return
 	}
@@ -592,10 +632,6 @@ func (s *Server) setSurprisesOpen(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	if err := r.ParseForm(); err != nil {
-		s.fail(w, r, err)
-		return
-	}
 	// The form sends a hidden "0" and, when ticked, a "1" after it.
 	open := false
 	for _, v := range r.PostForm["open"] {
@@ -616,18 +652,12 @@ func (s *Server) recipient(w http.ResponseWriter, r *http.Request, me store.Part
 		s.notFound(w, r)
 		return store.Participant{}, false
 	}
-	ps, err := s.store.Participants(r.Context(), me.CampaignID)
+	p, err := s.store.ParticipantInCampaign(r.Context(), me.CampaignID, id)
 	if err != nil {
 		s.fail(w, r, err)
 		return store.Participant{}, false
 	}
-	for _, p := range ps {
-		if p.ID == id {
-			return p, true
-		}
-	}
-	s.notFound(w, r)
-	return store.Participant{}, false
+	return p, true
 }
 
 func (s *Server) surprisePage(w http.ResponseWriter, r *http.Request) {
@@ -672,8 +702,13 @@ func (s *Server) saveSurprise(w http.ResponseWriter, r *http.Request) {
 		body, ok = "", true
 	}
 	if !ok {
+		_, err := s.store.SurpriseBy(r.Context(), me.ID, rec.ID)
+		if err != nil && !errors.Is(err, store.ErrNotFound) {
+			s.fail(w, r, err)
+			return
+		}
 		s.render(w, r, http.StatusUnprocessableEntity, views.SurpriseEdit(views.SurprisePage{
-			Campaign: c, Me: me, Recipient: rec, Body: body, Exists: true, Flash: notices["too-long"],
+			Campaign: c, Me: me, Recipient: rec, Body: body, Exists: err == nil, Flash: notices["too-long"],
 		}))
 		return
 	}

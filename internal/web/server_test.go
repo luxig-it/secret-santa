@@ -311,3 +311,67 @@ func TestSecurityHeaders(t *testing.T) {
 }
 
 func itoa(id int64) string { return strconv.FormatInt(id, 10) }
+
+func TestOversizedFormDoesNotDelete(t *testing.T) {
+	h := newHarness(t)
+	c := h.client()
+	_, join := h.setup()
+	anna := h.join(join, "Anna")
+	h.post(c, "/p/"+anna+"/wish", url.Values{"wishlist": {"KEEP-ME"}})
+
+	huge := url.Values{"wishlist": {"x"}, "padding": {strings.Repeat("a", maxForm)}}
+	if code, _ := h.post(c, "/p/"+anna+"/wish", huge); code != http.StatusRequestEntityTooLarge {
+		t.Fatalf("oversized post: %d", code)
+	}
+	p, _ := h.st.ParticipantByToken(t.Context(), anna)
+	if p.Wishlist != "KEEP-ME" {
+		t.Fatalf("wish after oversized post = %q", p.Wishlist)
+	}
+}
+
+func TestLoginThrottle(t *testing.T) {
+	h := newHarness(t)
+	c := h.client()
+	for i := range loginFailures {
+		if code, _ := h.post(c, "/login", url.Values{"token": {"wrong-secret"}}); code != 401 {
+			t.Fatalf("attempt %d: %d", i, code)
+		}
+	}
+	if code, _ := h.post(c, "/login", url.Values{"token": {orgSecret}}); code != http.StatusTooManyRequests {
+		t.Fatalf("after %d failures: %d", loginFailures, code)
+	}
+}
+
+func TestStaticFiles(t *testing.T) {
+	h := newHarness(t)
+	for path, want := range map[string]int{
+		"/static/app.css":    200,
+		"/static/":           404,
+		"/static/missing.js": 404,
+		"/static/../go.mod":  404,
+	} {
+		res, err := http.Get(h.srv.URL + path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		res.Body.Close()
+		if res.StatusCode != want {
+			t.Errorf("%s: %d, want %d", path, res.StatusCode, want)
+		}
+		if res.StatusCode == 404 && strings.Contains(res.Header.Get("Cache-Control"), "immutable") {
+			t.Errorf("%s: 404 cached as immutable", path)
+		}
+	}
+}
+
+func TestSurpriseAcrossCampaigns(t *testing.T) {
+	h := newHarness(t)
+	_, join1 := h.setup()
+	_, join2 := h.setup()
+	anna := h.join(join1, "Anna")
+	stranger := h.join(join2, "Stranger")
+	ps, _ := h.st.ParticipantByToken(t.Context(), stranger)
+	if code, _ := h.get(h.client(), "/p/"+anna+"/s/"+itoa(ps.ID)); code != 404 {
+		t.Fatalf("editor for someone in another campaign: %d", code)
+	}
+}
