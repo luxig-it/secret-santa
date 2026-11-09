@@ -484,7 +484,7 @@ func TestClosedSurprisesHiddenAfterDraw(t *testing.T) {
 	if _, page := h.get(c, "/p/"+anna+"/s/"+itoa(pBen.ID)); !strings.Contains(page, "möchte gerade keine Überraschungen") {
 		t.Error("Anna's editor does not tell her that her idea will not be shown")
 	}
-	if _, page := h.get(c, "/p/"+ben); !strings.Contains(page, "Solange du Überraschungen ausgeschaltet hast") {
+	if _, page := h.get(c, "/p/"+ben); !strings.Contains(page, "Da du keine Überraschungen mehr möchtest") {
 		t.Error("Ben is not told his stored idea is hidden")
 	}
 	h.post(c, "/o/"+org+"/draw", nil)
