@@ -348,6 +348,8 @@ func TestReadyWith(t *testing.T) {
 		{"surprises without the switch", Participant{}, 2, false},
 		{"switch without surprises", Participant{SurpriseSuffices: true}, 0, false},
 		{"switch and a surprise", Participant{SurpriseSuffices: true}, 1, true},
+		{"switch sets a wish aside", Participant{Wishlist: "x", SurpriseSuffices: true}, 0, false},
+		{"switch ignores time to think", Participant{Wishlist: "x", NeedsTime: true, SurpriseSuffices: true}, 1, true},
 	}
 	for _, c := range cases {
 		if got := c.p.ReadyWith(c.surprises); got != c.want {
@@ -431,7 +433,7 @@ func TestClosedSurprisesAreHiddenFromTheGiver(t *testing.T) {
 	}
 }
 
-func TestHopingForASurpriseReplacesTheWish(t *testing.T) {
+func TestHopingForASurpriseSetsTheWishAside(t *testing.T) {
 	ctx := context.Background()
 	s := open(t)
 	c := mustCampaign(t, s)
@@ -443,35 +445,21 @@ func TestHopingForASurpriseReplacesTheWish(t *testing.T) {
 		t.Fatal(err)
 	}
 	got, _ := s.ParticipantByToken(ctx, ben.Token)
-	if got.HasWish() || got.NeedsTime || !got.SurpriseSuffices || !got.SurprisesOpen {
-		t.Fatalf("wish=%q needsTime=%v suffices=%v open=%v, want empty, false, true, true",
-			got.Wishlist, got.NeedsTime, got.SurpriseSuffices, got.SurprisesOpen)
+	if got.Wishlist != "old wish" || got.HasWish() || !got.SurpriseSuffices || !got.SurprisesOpen {
+		t.Fatalf("wish=%q counts=%v suffices=%v open=%v, want the text kept but not counting, suffices and open",
+			got.Wishlist, got.HasWish(), got.SurpriseSuffices, got.SurprisesOpen)
 	}
-	// Turning it off again keeps surprises open.
-	if err := s.SetWish(ctx, c.ID, ben.ID, "new wish", false, false); err != nil {
+	// While hoping for a surprise, the set-aside wish and its time to think
+	// play no part: one idea makes Ben ready.
+	if got.ReadyWith(0) || !got.ReadyWith(1) {
+		t.Fatalf("ready with 0/1 ideas = %v/%v, want false/true", got.ReadyWith(0), got.ReadyWith(1))
+	}
+	// Switching back brings the wish back, surprises stay open.
+	if err := s.SetWish(ctx, c.ID, ben.ID, "old wish", false, false); err != nil {
 		t.Fatal(err)
 	}
 	got, _ = s.ParticipantByToken(ctx, ben.Token)
-	if got.Wishlist != "new wish" || got.SurpriseSuffices || !got.SurprisesOpen {
-		t.Fatalf("after turning off: %+v", got)
-	}
-}
-
-func TestDataFixDropsSufficesNextToAWish(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "legacy.db")
-	s := openAt(t, path)
-	c := mustCampaign(t, s)
-	ben := mustJoin(t, s, c, "Ben", "")
-	// A row as the previous rules allowed it: a wish and the hope for a
-	// surprise at the same time.
-	if _, err := s.db.Exec(`UPDATE participant SET wishlist = 'tea', surprise_suffices = 1 WHERE id = ?`, ben.ID); err != nil {
-		t.Fatal(err)
-	}
-	s.Close()
-
-	s = openAt(t, path)
-	got, _ := s.ParticipantByToken(context.Background(), ben.Token)
-	if got.Wishlist != "tea" || got.SurpriseSuffices {
-		t.Fatalf("wish=%q suffices=%v, want the wish kept and suffices off", got.Wishlist, got.SurpriseSuffices)
+	if !got.HasWish() || got.SurpriseSuffices || !got.SurprisesOpen || !got.ReadyWith(0) {
+		t.Fatalf("after switching back: %+v", got)
 	}
 }

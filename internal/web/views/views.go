@@ -45,7 +45,7 @@ func (m Member) Ready() bool { return m.ReadyWith(m.Surprises) }
 
 // Wishless marks somebody who has no wish and hopes for a surprise instead.
 // The group should help them out, so they are highlighted.
-func (m Member) Wishless() bool { return !m.HasWish() && m.SurpriseSuffices }
+func (m Member) Wishless() bool { return m.SurpriseSuffices }
 
 // AwaitsSurprise marks somebody who will be ready as soon as anybody leaves
 // a surprise idea for them – worth pointing out to the rest of the group.

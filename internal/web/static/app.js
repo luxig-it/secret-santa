@@ -84,12 +84,6 @@
   }
   for (const input of document.querySelectorAll("input[data-autosubmit]")) {
     input.addEventListener("change", () => {
-      // Switching on may throw away text; ask first if there is any.
-      const field = input.dataset.confirmClear && document.getElementById(input.dataset.confirmClear);
-      if (input.checked && field && field.value.trim() && !confirm(input.dataset.confirm)) {
-        input.checked = false;
-        return;
-      }
       input.form._changed = input;
       input.form.requestSubmit();
     });
