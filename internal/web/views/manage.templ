@@ -15,14 +15,17 @@ templ Manage(p ManagePage) {
 				@CopyField("join-url", "Einladungslink", p.JoinURL)
 			}
 		</section>
+		<section class="card">
+			<h2>Verwaltung</h2>
+			<p>Über diesen Link kommst du jederzeit zurück auf diese Seite – auch ohne Anmeldung. Gib ihn nur an Leute weiter, die mitorganisieren sollen.</p>
+			@CopyField("admin-url", "Verwaltungslink", p.AdminURL)
+			<p class="hint">Wünsche, Überraschungsideen und die Zuordnung siehst du hier bewusst nicht.</p>
+		</section>
 		@Group(p.CampaignPage, manageActions(p))
 		if !p.Campaign.Drawn() {
 			@exclusionsCard(p)
 		}
 		@drawCard(p)
-		<section class="card">
-			<p class="hint">Speichere diese Seite als Lesezeichen – ihre Adresse ist dein Zugang zur Verwaltung dieser Kampagne. Wünsche, Überraschungsideen und die Zuordnung siehst du hier bewusst nicht.</p>
-		</section>
 	}
 }
 

@@ -141,6 +141,10 @@ input:focus, select:focus, textarea:focus, button:focus-visible, a:focus-visible
 .copy-row { display: flex; gap: 8px; }
 .copy-row input { font-family: ui-monospace, monospace; font-size: .85rem; }
 .copy-row .btn { flex: none; }
+.btn-copy { display: inline-flex; align-items: center; gap: 6px; }
+.btn-icon { padding: 6px 9px; }
+.btn-copy.copied { border-color: var(--green); color: var(--green); }
+.icon { flex: none; }
 
 .pill { display: inline-block; font-size: .8rem; font-weight: 600; padding: 2px 10px; border-radius: 999px; }
 .pill-open { background: var(--gold-soft); color: var(--gold); }
@@ -179,6 +183,7 @@ input:focus, select:focus, textarea:focus, button:focus-visible, a:focus-visible
 }
 .campaigns li:first-child, .exclusions li:first-child { border-top: 0; }
 .campaigns a { font-weight: 600; }
+.campaigns .btn-icon { line-height: 1; }
 .exclusions li { justify-content: space-between; }
 
 .box { background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; }

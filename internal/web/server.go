@@ -325,7 +325,7 @@ func (s *Server) renderOrganizer(w http.ResponseWriter, r *http.Request, org con
 		return
 	}
 	s.render(w, r, status, views.Organizer(views.OrganizerPage{
-		Label: org.Label, Campaigns: campaigns, Flash: f, Form: form,
+		BaseURL: s.cfg.BaseURL, Label: org.Label, Campaigns: campaigns, Flash: f, Form: form,
 	}))
 }
 
@@ -411,6 +411,7 @@ func (s *Server) manage(w http.ResponseWriter, r *http.Request) {
 	s.render(w, r, http.StatusOK, views.Manage(views.ManagePage{
 		CampaignPage: views.CampaignPage{Campaign: c, Members: members, Flash: noticeFrom(r)},
 		JoinURL:      s.cfg.BaseURL + "/j/" + c.JoinToken,
+		AdminURL:     views.OrganizerURL(s.cfg.BaseURL, c.OrganizerToken),
 		Exclusions:   excl,
 	}))
 }
