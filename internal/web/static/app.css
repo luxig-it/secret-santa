@@ -255,3 +255,129 @@ input:focus, select:focus, textarea:focus, button:focus-visible, a:focus-visible
 .switch input:checked + .switch-track::after { transform: translateX(20px); }
 .switch input:focus-visible + .switch-track { outline: 2px solid var(--accent); outline-offset: 2px; }
 .js .js-hide { display: none; }
+
+/* ==========================================================================
+   Christmas theme. Everything festive lives in this block and only
+   overrides the tokens and a few surfaces above, so it can be dropped as a
+   whole. Decoration never carries meaning and stays out of the way of
+   reading: snow is faint, sits behind the content and stops for people who
+   ask for less motion.
+   ========================================================================== */
+
+:root {
+  --bg: #f8f3ea;
+  --surface: #fffdf8;
+  --text: #1d2a22;
+  --muted: #5b6a60;
+  --line: #e6dccb;
+  --accent: #b0151f;          /* Christmas red */
+  --accent-ink: #ffffff;
+  --accent-soft: #fbe6e4;
+  --green: #1c6b3c;           /* fir green */
+  --green-soft: #e1f1e6;
+  --gold: #8f6410;
+  --gold-soft: #fbf0d6;
+  --grey-soft: #efece4;
+  --danger: #a3121b;
+  --pine: #123d29;            /* header band */
+  --pine-ink: #fdf8ec;
+  --snow: rgba(140, 160, 150, .16);
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0d1a14;            /* winter night */
+    --surface: #15261d;
+    --text: #edf3ee;
+    --muted: #a3b5a9;
+    --line: #26392e;
+    --accent: #ff6b6b;
+    --accent-ink: #1c0909;
+    --accent-soft: #3b1c1c;
+    --green: #7ad6a0;
+    --green-soft: #173527;
+    --gold: #eac46f;
+    --gold-soft: #352d15;
+    --grey-soft: #1e3026;
+    --danger: #ff8f8f;
+    --pine: #0a2618;
+    --pine-ink: #f4efe2;
+    --snow: rgba(255, 255, 255, .10);
+  }
+}
+
+/* Faint snowflakes in the background. */
+body {
+  background-color: var(--bg);
+  background-image:
+    radial-gradient(circle at 20% 30%, var(--snow) 0 2px, transparent 3px),
+    radial-gradient(circle at 70% 80%, var(--snow) 0 1.5px, transparent 2.5px),
+    radial-gradient(circle at 45% 60%, var(--snow) 0 1px, transparent 2px);
+  background-size: 140px 140px, 90px 90px, 60px 60px;
+}
+
+/* Gentle snowfall on top of the pattern, behind everything else. */
+body::before {
+  content: "";
+  /* The layer moves by one tile and starts one tile higher, and every
+     tile size divides that distance, so the loop restarts seamlessly. */
+  position: fixed; inset: -240px 0 0 0;
+  pointer-events: none; z-index: 0;
+  background-image:
+    radial-gradient(circle at 10% 10%, var(--snow) 0 2.5px, transparent 3.5px),
+    radial-gradient(circle at 60% 40%, var(--snow) 0 2px, transparent 3px),
+    radial-gradient(circle at 85% 75%, var(--snow) 0 1.5px, transparent 2.5px);
+  background-size: 240px 240px, 120px 120px, 80px 80px;
+  animation: snowfall 30s linear infinite;
+}
+@keyframes snowfall {
+  from { transform: translateY(0); }
+  to   { transform: translateY(240px); }
+}
+@media (prefers-reduced-motion: reduce) {
+  body::before { animation: none; }
+}
+main, footer.site { position: relative; z-index: 1; }
+
+/* Fir-green band across the top with a candy-cane edge. */
+/* The header spans the full width; its content lines up with the column
+   through padding, so nothing reaches past the viewport. */
+header.site {
+  position: relative; z-index: 2;
+  max-width: none;
+  padding: 16px max(16px, calc((100% - 760px) / 2 + 16px)) 23px;
+  background: var(--pine);
+  margin-bottom: 8px;
+}
+header.site::after {
+  content: "";
+  position: absolute; left: 0; right: 0; bottom: 0; height: 7px;
+  background: repeating-linear-gradient(-45deg, #c8102e 0 9px, #fdf8ec 9px 18px);
+}
+header.site .brand { color: var(--pine-ink); letter-spacing: .02em; }
+header.site .brand::after { content: " ✦"; color: #e8c46a; }
+
+/* Headings in a warm serif. */
+h1, h2, .card-mine > summary {
+  font-family: Georgia, "Iowan Old Style", "Palatino Linotype", "Times New Roman", serif;
+  font-weight: 600;
+}
+.campaign-head h1, .hero h1 { color: var(--pine); }
+@media (prefers-color-scheme: dark) {
+  .campaign-head h1, .hero h1 { color: var(--text); }
+}
+
+/* Cards: warmer paper and a fine gold top line. */
+.card { border-top: 3px solid var(--gold-soft); }
+.card-accent { border-top-color: var(--accent); }
+.card-result { border-top-color: var(--green); }
+.card-help { border-top-color: var(--gold); }
+
+/* The result card gets a bow. */
+.card-result { position: relative; }
+.card-result::after {
+  content: "🎀";
+  position: absolute; top: 10px; right: 14px; font-size: 1.5rem;
+}
+
+footer.site::before { content: "❄ "; color: var(--muted); }
+footer.site::after { content: " ❄"; color: var(--muted); }
