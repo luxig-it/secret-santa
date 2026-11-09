@@ -83,6 +83,7 @@ func (p CampaignPage) AllReady() bool {
 // ManagePage is the organizer's view of a campaign.
 type ManagePage struct {
 	CampaignPage
+	BaseURL    string
 	JoinURL    string
 	AdminURL   string
 	Exclusions []store.Exclusion
@@ -202,6 +203,12 @@ func plural(n int, one, many string) string {
 
 func participantPath(token string, rest string) string { return "/p/" + token + rest }
 func organizerPath(token string, rest string) string   { return "/o/" + token + rest }
+
+// JoinURL is the absolute invitation link of a campaign.
+func JoinURL(base, token string) string { return base + joinPath(token) }
+
+// ParticipantURL is the absolute personal link of a participant.
+func ParticipantURL(base, token string) string { return base + participantPath(token, "") }
 
 // OrganizerURL is the absolute management link of a campaign.
 func OrganizerURL(base, token string) string { return base + organizerPath(token, "") }

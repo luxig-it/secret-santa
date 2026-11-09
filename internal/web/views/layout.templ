@@ -112,3 +112,12 @@ templ CopyButton(value, label string) {
 		<span class="copy-label sr-only" aria-live="polite">Kopieren</span>
 	</button>
 }
+
+// CopyTextButton is a copy button with a visible label, for places where an
+// icon alone would not say what gets copied.
+templ CopyTextButton(value, text, label string) {
+	<button type="button" class="btn btn-secondary btn-small btn-copy" data-copy-value={ value } aria-label={ label } title={ label }>
+		@copyIcon()
+		<span class="copy-label" aria-live="polite">{ text }</span>
+	</button>
+}
