@@ -9,7 +9,12 @@ import (
 
 func open(t *testing.T) *Store {
 	t.Helper()
-	s, err := Open(filepath.Join(t.TempDir(), "test.db"))
+	return openAt(t, filepath.Join(t.TempDir(), "test.db"))
+}
+
+func openAt(t *testing.T, path string) *Store {
+	t.Helper()
+	s, err := Open(path)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -79,7 +84,7 @@ func TestDrawNeedsEveryWish(t *testing.T) {
 		t.Fatal("campaign flagged as drawn after a refused draw")
 	}
 
-	if err := s.SetWishlist(ctx, c.ID, carl.ID, "tea"); err != nil {
+	if err := s.SetWish(ctx, c.ID, carl.ID, "tea", false); err != nil {
 		t.Fatal(err)
 	}
 	if err := s.Draw(ctx, c.ID); err != nil {
@@ -235,7 +240,7 @@ func TestSurprisesFrozenAfterDraw(t *testing.T) {
 	if err := s.SaveSurprise(ctx, c.ID, a.ID, b.ID, "late"); !errors.Is(err, ErrAlreadyDrawn) {
 		t.Fatalf("surprise after draw: got %v", err)
 	}
-	if err := s.SetWishlist(ctx, c.ID, a.ID, ""); !errors.Is(err, ErrAlreadyDrawn) {
+	if err := s.SetWish(ctx, c.ID, a.ID, "", false); !errors.Is(err, ErrAlreadyDrawn) {
 		t.Fatalf("wish after draw: got %v", err)
 	}
 	if err := s.AddExclusion(ctx, c.ID, a.ID, b.ID); !errors.Is(err, ErrAlreadyDrawn) {
@@ -252,7 +257,7 @@ func TestUpdatesStayInsideTheirCampaign(t *testing.T) {
 	c := mustCampaign(t, s)
 	other := mustCampaign(t, s)
 	p := mustJoin(t, s, other, "Anna", "")
-	if err := s.SetWishlist(ctx, c.ID, p.ID, "x"); !errors.Is(err, ErrNotFound) {
+	if err := s.SetWish(ctx, c.ID, p.ID, "x", false); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("wish: got %v", err)
 	}
 	if err := s.SetSurprisesOpen(ctx, c.ID, p.ID, false); !errors.Is(err, ErrNotFound) {
@@ -277,5 +282,53 @@ func TestCampaignsByOrganizer(t *testing.T) {
 	}
 	if len(got) != 2 || got[0].ID != second.ID || got[1].ID != first.ID {
 		t.Fatalf("got %+v", got)
+	}
+}
+
+func TestNeedsTimeBlocksDraw(t *testing.T) {
+	ctx := context.Background()
+	s := open(t)
+	c := mustCampaign(t, s)
+	mustJoin(t, s, c, "Anna", "x")
+	ben := mustJoin(t, s, c, "Ben", "")
+
+	if err := s.SetWish(ctx, c.ID, ben.ID, "book", true); err != nil {
+		t.Fatal(err)
+	}
+	got, _ := s.ParticipantByToken(ctx, ben.Token)
+	if !got.HasWish() || !got.NeedsTime || got.Ready() {
+		t.Fatalf("wish=%v needsTime=%v ready=%v, want wish, time, not ready", got.HasWish(), got.NeedsTime, got.Ready())
+	}
+	if err := s.Draw(ctx, c.ID); !errors.Is(err, ErrNotReady) {
+		t.Fatalf("draw while Ben thinks: got %v", err)
+	}
+	if err := s.SetWish(ctx, c.ID, ben.ID, "book", false); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Draw(ctx, c.ID); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestMigrationAddsColumns(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "old.db")
+	s := openAt(t, path)
+	// Simulate a database from before needs_time existed.
+	if _, err := s.db.Exec(`ALTER TABLE participant DROP COLUMN needs_time`); err != nil {
+		t.Fatal(err)
+	}
+	c := mustCampaign(t, s)
+	if _, err := s.db.Exec(`INSERT INTO participant (campaign_id, name, token, created_at) VALUES (?, 'Old', 'old-token', '2026-01-01T00:00:00Z')`, c.ID); err != nil {
+		t.Fatal(err)
+	}
+	s.Close() // the Cleanup's second Close is harmless
+
+	s = openAt(t, path)
+	p, err := s.ParticipantByToken(context.Background(), "old-token")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p.NeedsTime {
+		t.Fatal("migrated participant needs time by default")
 	}
 }

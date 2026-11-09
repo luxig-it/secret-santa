@@ -2,9 +2,9 @@ package views
 
 import "fmt"
 
-// Group lists every member with the three things everybody may know about
-// them: whether they entered a wish, how many surprise ideas they got, and
-// whether that makes them ready for the draw. Actions renders the optional
+// Group lists every member with what everybody may know about them: whether
+// they entered a wish, how many surprise ideas they got, and whether they
+// are ready for the draw or still want time to think. Actions renders the optional
 // per-row controls of the page using it.
 templ Group(p CampaignPage, actions func(Member) templ.Component) {
 	<section class="card">
@@ -39,6 +39,8 @@ templ Group(p CampaignPage, actions func(Member) templ.Component) {
 							}
 							if m.Ready() {
 								<li class="badge badge-ready">● Bereit zur Auslosung</li>
+							} else if m.Thinking() {
+								<li class="badge badge-think">⏳ Braucht noch Bedenkzeit</li>
 							} else {
 								<li class="badge badge-wait">○ Noch nicht bereit</li>
 							}

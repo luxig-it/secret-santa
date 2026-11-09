@@ -35,9 +35,6 @@ type Member struct {
 	ByMe bool
 }
 
-// Ready mirrors the draw's precondition.
-func (m Member) Ready() bool { return m.HasWish() }
-
 // CampaignPage is what every page about one campaign needs.
 type CampaignPage struct {
 	Campaign store.Campaign

@@ -20,7 +20,8 @@ The interface is German.
    - The recipient never sees the ideas left for them.
 5. **Group overview** – everybody in the group sees all members and their
    status: wish entered, number of surprise ideas, ready for the draw.
-6. **Draw** – a participant is ready once they entered a wish. When everybody
+6. **Draw** – a participant is ready once they entered a wish, unless they
+   switched on *Bedenkzeit* ("time to think") while saving it. When everybody
    is ready the organizer draws. The result is a single cycle (nobody draws
    themselves, no pairs that only gift each other), honouring the organizer's
    exclusions.
