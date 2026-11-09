@@ -12,6 +12,9 @@ templ Participant(p ParticipantPage) {
 		}
 		<section class="card card-accent">
 			<h2>Hallo { p.Me.Name }!</h2>
+			if !p.Campaign.Drawn() {
+				@myStatus(p.MyStatus())
+			}
 			<p>Das ist <b>dein persönlicher Link</b>. Speichere ihn als Lesezeichen und gib ihn nicht weiter – wer ihn hat, sieht, wen du beschenkst.</p>
 			@CopyField("my-url", "Dein Link", p.MyURL)
 		</section>
@@ -68,15 +71,6 @@ templ wishCard(p ParticipantPage) {
 				<p class="muted">Dir ist nichts eingefallen – du hast dich auf eine Überraschung gefreut.</p>
 			}
 		} else {
-			if m := p.MeMember(); m.SurpriseInsteadOfWish() {
-				<p class="notice notice-gift">Für dich liegt schon eine Überraschung bereit – damit bist du bereit zur Auslosung.</p>
-			} else if m.AwaitsSurprise() {
-				<p class="notice">Du bist bereit, sobald jemand eine Überraschung für dich hinterlegt. Die anderen sehen, dass sie dir helfen können.</p>
-			} else if !p.Me.HasWish() {
-				<p class="notice">Sobald du einen Wunsch hinterlegst, bist du bereit zur Auslosung. Ohne Wunsch kann nicht ausgelost werden.</p>
-			} else if p.Me.Thinking() {
-				<p class="notice">Du hast dir noch Bedenkzeit genommen und giltst deshalb noch nicht als bereit. Schalte sie aus, sobald dein Wunsch feststeht.</p>
-			}
 			<form method="post" action={ templ.URL(participantPath(p.Me.Token, "/wish")) } class="stack">
 				if !p.Me.SurpriseSuffices {
 					@MarkdownEditor("wishlist", "wishlist", "Was wünschst du dir?", p.Me.Wishlist, participantPath(p.Me.Token, "/preview"), "z. B.\n- ein gutes Buch\n- Schokolade")
@@ -202,4 +196,15 @@ templ SurpriseEdit(p SurprisePage) {
 			</form>
 		</section>
 	}
+}
+
+templ myStatus(ready bool, text string) {
+	<p class={ "my-status", templ.KV("my-status-ready", ready) } id="mein-status">
+		if ready {
+			<span aria-hidden="true">●</span>
+		} else {
+			<span aria-hidden="true">○</span>
+		}
+		{ text }
+	</p>
 }
