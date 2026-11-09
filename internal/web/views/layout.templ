@@ -2,7 +2,22 @@ package views
 
 import "github.com/luxig-it/secret-santa/internal/store"
 
+// Layout is the page frame for pages that belong to no campaign.
 templ Layout(title string) {
+	@page(title, "") {
+		{ children... }
+	}
+}
+
+// CampaignLayout puts the campaign's title into the header band, where the
+// app name would otherwise be.
+templ CampaignLayout(title, campaign string) {
+	@page(title, campaign) {
+		{ children... }
+	}
+}
+
+templ page(title, campaign string) {
 	<!DOCTYPE html>
 	<html lang="de">
 		<head>
@@ -17,7 +32,11 @@ templ Layout(title string) {
 		</head>
 		<body>
 			<header class="site">
-				<a class="brand" href="/">🎁 Wichteln</a>
+				if campaign != "" {
+					<span class="brand brand-campaign">🎄 { campaign }</span>
+				} else {
+					<a class="brand" href="/">🎁 Wichteln</a>
+				}
 			</header>
 			<main>
 				{ children... }
@@ -42,7 +61,9 @@ func flashRole(f Flash) string {
 
 templ CampaignHead(c store.Campaign) {
 	<section class="campaign-head">
-		<h1>{ c.Title }</h1>
+		// The title is shown in the header band; the heading stays for
+		// screen readers and the document outline.
+		<h1 class="sr-only">{ c.Title }</h1>
 		<dl class="facts">
 			if c.Budget != "" {
 				<div><dt>Budget</dt><dd>{ c.Budget }</dd></div>
